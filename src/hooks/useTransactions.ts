@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Transaction } from '@/types/database';
+import type { TablesInsert } from '@/integrations/supabase/types';
 
 export const useTransactions = () => {
   return useQuery({
@@ -24,10 +25,10 @@ export const useCreateTransaction = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (transaction: { lead_id: string; total_amount?: number; notes?: string; created_by?: string }) => {
+    mutationFn: async (transaction: Omit<TablesInsert<'transactions'>, 'transaction_number'>) => {
       const { data, error } = await supabase
         .from('transactions')
-        .insert(transaction)
+        .insert({ ...transaction, transaction_number: '' } as TablesInsert<'transactions'>)
         .select()
         .single();
       
