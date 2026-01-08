@@ -1,11 +1,15 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
 import { AppRole } from '@/types/database';
 
+interface MockUser {
+  id: string;
+  email: string;
+  full_name?: string;
+}
+
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: MockUser | null;
+  session: { user: MockUser } | null;
   role: AppRole | null;
   isAdmin: boolean;
   isMaintainer: boolean;
@@ -17,94 +21,130 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const STORAGE_KEY = 'mock_auth';
+const STORAGE_ROLE_KEY = 'mock_user_role';
+
+// Mock users - in a real app, this would be in a database
+const MOCK_USERS: Record<string, { password: string; full_name?: string; role?: AppRole }> = {
+  'admin@gmail.com': { password: 'admin123', full_name: 'Admin User', role: 'admin' },
+  'maintainer@example.com': { password: 'maintainer123', full_name: 'Maintainer User', role: 'maintainer' },
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<MockUser | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchUserRole = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .maybeSingle();
-      
-      if (error) {
-        console.error('Error fetching role:', error);
-        return null;
-      }
-      return data?.role as AppRole | null;
-    } catch (err) {
-      console.error('Error fetching role:', err);
-      return null;
-    }
-  };
-
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // Defer role fetch with setTimeout to prevent deadlock
-        if (session?.user) {
-          setTimeout(() => {
-            fetchUserRole(session.user.id).then(setRole);
-          }, 0);
-        } else {
-          setRole(null);
-        }
-        
-        setIsLoading(false);
+    // Load user from localStorage on mount
+    const storedUser = localStorage.getItem(STORAGE_KEY);
+    const storedRole = localStorage.getItem(STORAGE_ROLE_KEY) as AppRole | null;
+    
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+        setRole(storedRole);
+      } catch (e) {
+        // Invalid stored data, clear it
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_ROLE_KEY);
       }
-    );
-
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchUserRole(session.user.id).then(setRole);
-      }
-      setIsLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    }
+    
+    setIsLoading(false);
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Normalize email - trim whitespace and convert to lowercase
+    const normalizedEmail = email.trim().toLowerCase();
+    const mockUser = MOCK_USERS[normalizedEmail];
+    
+    // Debug: log the login attempt
+    console.log('Login attempt:', {
+      originalEmail: email,
+      normalizedEmail,
+      passwordLength: password.length,
+      userExists: !!mockUser,
+      expectedPassword: mockUser?.password,
+      passwordMatch: mockUser?.password === password
+    });
+    
+    // Check if user exists and password matches
+    if (mockUser && mockUser.password === password) {
+      const userData: MockUser = {
+        id: normalizedEmail.replace('@', '_').replace(/\./g, '_'),
+        email: normalizedEmail,
+        full_name: mockUser.full_name,
+      };
+
+      setUser(userData);
+      setRole(mockUser.role || null);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+      if (mockUser.role) {
+        localStorage.setItem(STORAGE_ROLE_KEY, mockUser.role);
+      }
+
+      return { error: null };
+    }
+    
+    // If email is admin@gmail.com but wrong password, give helpful message
+    if (normalizedEmail === 'admin@gmail.com') {
+      return { error: new Error('Invalid password. Try: admin123') };
+    }
+    
+    // If email is maintainer@example.com but wrong password
+    if (normalizedEmail === 'maintainer@example.com') {
+      return { error: new Error('Invalid password. Try: maintainer123') };
+    }
+    
+    // Default error
+    return { error: new Error('Invalid email or password. Try: admin@gmail.com / admin123') };
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const redirectUrl = `${window.location.origin}/`;
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 300));
     
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: { full_name: fullName }
-      }
-    });
-    return { error: error as Error | null };
+    const emailLower = email.toLowerCase();
+    
+    if (MOCK_USERS[emailLower]) {
+      return { error: new Error('User already exists') };
+    }
+
+    // Create new user (default role is null - needs admin assignment)
+    const userData: MockUser = {
+      id: emailLower.replace('@', '_').replace(/\./g, '_'),
+      email: emailLower,
+      full_name: fullName,
+    };
+
+    // Store in mock users (in real app, this would go to database)
+    MOCK_USERS[emailLower] = { password, full_name: fullName };
+    
+    setUser(userData);
+    setRole(null); // New users need role assignment
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+
+    return { error: null };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     setUser(null);
-    setSession(null);
     setRole(null);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_ROLE_KEY);
   };
 
   const value = {
     user,
-    session,
+    session: user ? { user } : null,
     role,
     isAdmin: role === 'admin',
     isMaintainer: role === 'maintainer',

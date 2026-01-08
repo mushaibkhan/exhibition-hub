@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Stall, Lead, Transaction } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUpdateStall } from '@/hooks/useStalls';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 
@@ -39,15 +39,13 @@ const statusColors = {
 export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUpdate }: StallDrawerProps) => {
   const { isAdmin, isMaintainer } = useAuth();
   const { toast } = useToast();
+  const updateStall = useUpdateStall();
   const [notes, setNotes] = useState(stall?.notes || '');
   const [status, setStatus] = useState(stall?.status || 'available');
-  const [isSaving, setIsSaving] = useState(false);
 
   if (!stall) return null;
 
   const handleSave = async () => {
-    setIsSaving(true);
-    
     const updates: Partial<Stall> = { notes };
     
     // Maintainers can only change to reserved
@@ -60,27 +58,21 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
       updates.status = status as Stall['status'];
     }
 
-    const { error } = await supabase
-      .from('stalls')
-      .update(updates)
-      .eq('id', stall.id);
-
-    if (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to update stall',
-        variant: 'destructive',
-      });
-    } else {
+    try {
+      await updateStall.mutateAsync({ id: stall.id, updates });
       toast({
         title: 'Success',
         description: 'Stall updated successfully',
       });
       onUpdate();
       onOpenChange(false);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update stall',
+        variant: 'destructive',
+      });
     }
-
-    setIsSaving(false);
   };
 
   return (
@@ -194,8 +186,8 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
 
           {/* Actions */}
           <div className="flex gap-3 pt-4">
-            <Button onClick={handleSave} disabled={isSaving} className="flex-1">
-              {isSaving ? 'Saving...' : 'Save Changes'}
+            <Button onClick={handleSave} disabled={updateStall.isPending} className="flex-1">
+              {updateStall.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
