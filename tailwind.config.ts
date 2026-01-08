@@ -13,6 +13,9 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -46,6 +49,30 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
+        stall: {
+          available: "hsl(var(--stall-available))",
+          "available-border": "hsl(var(--stall-available-border))",
+          reserved: "hsl(var(--stall-reserved))",
+          "reserved-border": "hsl(var(--stall-reserved-border))",
+          sold: "hsl(var(--stall-sold))",
+          "sold-border": "hsl(var(--stall-sold-border))",
+          pending: "hsl(var(--stall-pending))",
+          "pending-border": "hsl(var(--stall-pending-border))",
+          blocked: "hsl(var(--stall-blocked))",
+          "blocked-border": "hsl(var(--stall-blocked-border))",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
