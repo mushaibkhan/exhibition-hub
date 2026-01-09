@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Stall, Lead, Transaction } from '@/types/database';
-import { useAuth } from '@/contexts/AuthContext';
-import { useUpdateStall } from '@/hooks/useStalls';
+import { useMockData } from '@/contexts/MockDataContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -37,15 +36,31 @@ const statusColors = {
 };
 
 export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUpdate }: StallDrawerProps) => {
-  const { isAdmin, isMaintainer } = useAuth();
+  const { isAdmin, role, updateStall: updateStallFn, getLeadById, transactions } = useMockData();
+  const isMaintainer = role === 'maintainer';
   const { toast } = useToast();
-  const updateStall = useUpdateStall();
   const [notes, setNotes] = useState(stall?.notes || '');
   const [status, setStatus] = useState(stall?.status || 'available');
 
+  // Reset form when stall changes
+  useEffect(() => {
+    if (stall) {
+      setNotes(stall.notes || '');
+      setStatus(stall.status);
+    }
+  }, [stall]);
+
   if (!stall) return null;
 
-  const handleSave = async () => {
+  // Find associated lead and transaction from mock data
+  const stallTransaction = transactions.find(t => {
+    const txnLead = getLeadById(t.lead_id);
+    return txnLead && (stall.status === 'sold' || stall.status === 'pending');
+  });
+  const stallLead = stallTransaction ? getLeadById(stallTransaction.lead_id) : lead;
+  const displayTransaction = transaction || stallTransaction;
+
+  const handleSave = () => {
     const updates: Partial<Stall> = { notes };
     
     // Maintainers can only change to reserved
@@ -58,21 +73,13 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
       updates.status = status as Stall['status'];
     }
 
-    try {
-      await updateStall.mutateAsync({ id: stall.id, updates });
-      toast({
-        title: 'Success',
-        description: 'Stall updated successfully',
-      });
-      onUpdate();
-      onOpenChange(false);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to update stall',
-        variant: 'destructive',
-      });
-    }
+    updateStallFn(stall.id, updates);
+    toast({
+      title: 'Success',
+      description: 'Stall updated successfully',
+    });
+    onUpdate();
+    onOpenChange(false);
   };
 
   return (
@@ -112,14 +119,14 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
           <Separator />
 
           {/* Assigned Buyer */}
-          {lead && (
+          {stallLead && (
             <>
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Buyer</h3>
                 <div className="text-sm space-y-2">
-                  <p><span className="text-muted-foreground">Name:</span> {lead.name}</p>
-                  <p><span className="text-muted-foreground">Company:</span> {lead.company || 'N/A'}</p>
-                  <p><span className="text-muted-foreground">Phone:</span> {lead.phone}</p>
+                  <p><span className="text-muted-foreground">Name:</span> {stallLead.name}</p>
+                  <p><span className="text-muted-foreground">Company:</span> {stallLead.company || 'N/A'}</p>
+                  <p><span className="text-muted-foreground">Phone:</span> {stallLead.phone}</p>
                 </div>
               </div>
               <Separator />
@@ -127,15 +134,15 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
           )}
 
           {/* Transaction */}
-          {transaction && isAdmin && (
+          {displayTransaction && isAdmin && (
             <>
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Transaction</h3>
                 <div className="text-sm space-y-2">
-                  <p><span className="text-muted-foreground">ID:</span> {transaction.transaction_number}</p>
-                  <p><span className="text-muted-foreground">Total:</span> ₹{transaction.total_amount.toLocaleString()}</p>
-                  <p><span className="text-muted-foreground">Paid:</span> ₹{transaction.amount_paid.toLocaleString()}</p>
-                  <p><span className="text-muted-foreground">Pending:</span> ₹{(transaction.total_amount - transaction.amount_paid).toLocaleString()}</p>
+                  <p><span className="text-muted-foreground">ID:</span> {displayTransaction.transaction_number}</p>
+                  <p><span className="text-muted-foreground">Total:</span> ₹{displayTransaction.total_amount.toLocaleString()}</p>
+                  <p><span className="text-muted-foreground">Paid:</span> ₹{displayTransaction.amount_paid.toLocaleString()}</p>
+                  <p><span className="text-muted-foreground">Pending:</span> ₹{(displayTransaction.total_amount - displayTransaction.amount_paid).toLocaleString()}</p>
                 </div>
               </div>
               <Separator />
@@ -186,8 +193,8 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
 
           {/* Actions */}
           <div className="flex gap-3 pt-4">
-            <Button onClick={handleSave} disabled={updateStall.isPending} className="flex-1">
-              {updateStall.isPending ? 'Saving...' : 'Save Changes'}
+            <Button onClick={handleSave} className="flex-1">
+              Save Changes
             </Button>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
