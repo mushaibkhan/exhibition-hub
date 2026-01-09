@@ -48,7 +48,7 @@ export const MockSidebar = () => {
               <LayoutGrid className="h-5 w-5 text-sidebar-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-sm font-semibold">Exhibition</h1>
+              <h1 className="text-sm font-semibold">HydExpo</h1>
               <p className="text-xs text-sidebar-foreground/70">Management System</p>
             </div>
           </div>
