@@ -1,12 +1,11 @@
 import { cn } from '@/lib/utils';
 import { Stall, StallStatus } from '@/types/database';
-import { useAuth } from '@/contexts/AuthContext';
+import { useMockData } from '@/contexts/MockDataContext';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-
 interface StallBoxProps {
   stall: Stall;
   assignedTo?: string | null;
@@ -32,7 +31,7 @@ const statusLabels: Record<StallStatus, string> = {
 };
 
 export const StallBox = ({ stall, assignedTo, amountPaid, totalAmount, onClick }: StallBoxProps) => {
-  const { isAdmin } = useAuth();
+  const { isAdmin } = useMockData();
 
   const gridColumn = `${stall.position_x + 1} / span ${stall.width}`;
   const gridRow = `${stall.position_y + 1} / span ${stall.height}`;
