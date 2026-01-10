@@ -5,9 +5,10 @@ import { FloorLegend } from '@/components/floor/FloorLegend';
 import { StallDrawer } from '@/components/floor/StallDrawer';
 import { useMockData } from '@/contexts/MockDataContext';
 import { Stall } from '@/types/database';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index = () => {
-  const { stalls, getLeadById, transactions, getTransactionsByLeadId } = useMockData();
+  const { stalls, getLeadById, transactions } = useMockData();
   const [selectedStall, setSelectedStall] = useState<Stall | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -16,100 +17,51 @@ const Index = () => {
     setDrawerOpen(true);
   };
 
-  // Group stalls by zone
-  const hallAStalls = stalls.filter(s => s.zone === 'Hall A');
-  const hallBStalls = stalls.filter(s => s.zone === 'Hall B');
+  const floor1Stalls = stalls.filter(s => s.zone === 'Floor 1');
+  const floor2Stalls = stalls.filter(s => s.zone === 'Floor 2');
 
-  // Get assignment info for stalls
   const getStallInfo = (stall: Stall) => {
-    // Find transaction that includes this stall
-    const txn = transactions.find(t => {
-      const lead = getLeadById(t.lead_id);
-      return lead && (stall.status === 'sold' || stall.status === 'pending' || stall.status === 'reserved');
-    });
-    
-    if (txn) {
-      const lead = getLeadById(txn.lead_id);
-      return {
-        assignedTo: lead?.name,
-        amountPaid: txn.amount_paid,
-        totalAmount: txn.total_amount,
-      };
+    if (stall.lead_id) {
+      const lead = getLeadById(stall.lead_id);
+      const txn = transactions.find(t => t.lead_id === stall.lead_id);
+      return { assignedTo: lead?.name, amountPaid: txn?.amount_paid, totalAmount: txn?.total_amount };
     }
     return {};
   };
 
+  const renderFloorGrid = (floorStalls: Stall[], cols: number, rows: number) => (
+    <div className="grid gap-1 p-4 bg-muted/30 rounded-lg overflow-auto" style={{ gridTemplateColumns: `repeat(${cols}, minmax(50px, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(50px, auto))` }}>
+      {floorStalls.map((stall) => {
+        const info = getStallInfo(stall);
+        return <StallBox key={stall.id} stall={stall} assignedTo={info.assignedTo} amountPaid={info.amountPaid} totalAmount={info.totalAmount} onClick={() => handleStallClick(stall)} />;
+      })}
+    </div>
+  );
+
   return (
-    <MockAppLayout title="Floor Layout" subtitle="Exhibition hall stall overview">
+    <MockAppLayout title="Floor Layout" subtitle="Exhibition floor stall overview">
       <div className="space-y-6">
         <FloorLegend />
-        
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Hall A */}
-          <div className="rounded-xl border bg-card p-6 shadow-sm">
-            <h3 className="mb-4 text-lg font-semibold text-foreground">Hall A</h3>
-            <div 
-              className="grid gap-2"
-              style={{ 
-                gridTemplateColumns: 'repeat(5, minmax(60px, 1fr))',
-                gridTemplateRows: 'repeat(6, minmax(60px, auto))'
-              }}
-            >
-              {hallAStalls.map((stall) => {
-                const info = getStallInfo(stall);
-                return (
-                  <StallBox 
-                    key={stall.id} 
-                    stall={stall}
-                    assignedTo={info.assignedTo}
-                    amountPaid={info.amountPaid}
-                    totalAmount={info.totalAmount}
-                    onClick={() => handleStallClick(stall)} 
-                  />
-                );
-              })}
+        <Tabs defaultValue="floor1" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="floor1">Floor 1 (Ground)</TabsTrigger>
+            <TabsTrigger value="floor2">Floor 2 (First)</TabsTrigger>
+          </TabsList>
+          <TabsContent value="floor1" className="mt-4">
+            <div className="rounded-xl border bg-card p-6 shadow-sm">
+              <h3 className="mb-4 text-lg font-semibold">Ground Floor - {floor1Stalls.length} Stalls</h3>
+              {renderFloorGrid(floor1Stalls, 14, 6)}
             </div>
-          </div>
-
-          {/* Hall B */}
-          <div className="rounded-xl border bg-card p-6 shadow-sm">
-            <h3 className="mb-4 text-lg font-semibold text-foreground">Hall B</h3>
-            <div 
-              className="grid gap-2"
-              style={{ 
-                gridTemplateColumns: 'repeat(5, minmax(60px, 1fr))',
-                gridTemplateRows: 'repeat(6, minmax(60px, auto))'
-              }}
-            >
-              {hallBStalls.map((stall) => {
-                const info = getStallInfo(stall);
-                // Adjust position for Hall B (offset by 6)
-                const adjustedStall = {
-                  ...stall,
-                  position_x: stall.position_x - 6,
-                };
-                return (
-                  <StallBox 
-                    key={stall.id} 
-                    stall={adjustedStall}
-                    assignedTo={info.assignedTo}
-                    amountPaid={info.amountPaid}
-                    totalAmount={info.totalAmount}
-                    onClick={() => handleStallClick(stall)} 
-                  />
-                );
-              })}
+          </TabsContent>
+          <TabsContent value="floor2" className="mt-4">
+            <div className="rounded-xl border bg-card p-6 shadow-sm">
+              <h3 className="mb-4 text-lg font-semibold">First Floor - {floor2Stalls.length} Stalls</h3>
+              {renderFloorGrid(floor2Stalls, 12, 5)}
             </div>
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
-
-      <StallDrawer
-        stall={selectedStall}
-        open={drawerOpen}
-        onOpenChange={setDrawerOpen}
-        onUpdate={() => {}}
-      />
+      <StallDrawer stall={selectedStall} open={drawerOpen} onOpenChange={setDrawerOpen} onUpdate={() => {}} />
     </MockAppLayout>
   );
 };

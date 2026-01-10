@@ -44,6 +44,7 @@ export interface Stall {
   height: number;
   created_at: string;
   updated_at: string;
+  lead_id?: string | null;
 }
 
 export interface Service {
@@ -58,6 +59,14 @@ export interface Service {
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ServiceAllocation {
+  id: string;
+  service_id: string;
+  stall_id: string;
+  quantity: number;
+  created_at: string;
 }
 
 export interface Lead {
