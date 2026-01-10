@@ -12,25 +12,20 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Lead, LeadStatus } from '@/types/database';
-import { Plus, Search, Phone, Mail, Building2, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Phone, Mail, Building2, Edit, Trash2, MapPin } from 'lucide-react';
 
-const statusColors: Record<LeadStatus, string> = {
-  new: 'bg-blue-100 text-blue-800', follow_up: 'bg-purple-100 text-purple-800',
-  interested: 'bg-cyan-100 text-cyan-800', not_interested: 'bg-gray-100 text-gray-800',
-  converted: 'bg-green-100 text-green-800',
-};
-
-const statusLabels: Record<LeadStatus, string> = {
-  new: 'New', follow_up: 'Follow Up', interested: 'Interested',
-  not_interested: 'Not Interested', converted: 'Converted',
-};
+const statusColors: Record<LeadStatus, string> = { new: 'bg-blue-100 text-blue-800', follow_up: 'bg-purple-100 text-purple-800', interested: 'bg-cyan-100 text-cyan-800', not_interested: 'bg-gray-100 text-gray-800', converted: 'bg-green-100 text-green-800' };
+const statusLabels: Record<LeadStatus, string> = { new: 'New', follow_up: 'Follow Up', interested: 'Interested', not_interested: 'Not Interested', converted: 'Converted' };
 
 const Leads = () => {
-  const { leads, addLead, updateLead, deleteLead, isAdmin } = useMockData();
+  const { leads, addLead, updateLead, deleteLead, isAdmin, stalls, allocateStallToLead, getAvailableStalls } = useMockData();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [allocateDialogOpen, setAllocateDialogOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [selectedStallId, setSelectedStallId] = useState<string>('');
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [formData, setFormData] = useState({ name: '', phone: '', email: '', company: '', status: 'new' as LeadStatus, interested_size: '', interested_zone: '', notes: '' });
 
@@ -50,6 +45,19 @@ const Leads = () => {
 
   const handleEdit = (lead: Lead) => { setEditingLead(lead); setFormData({ name: lead.name, phone: lead.phone, email: lead.email || '', company: lead.company || '', status: lead.status, interested_size: lead.interested_size || '', interested_zone: lead.interested_zone || '', notes: lead.notes || '' }); setDialogOpen(true); };
 
+  const handleAllocate = (lead: Lead) => { setSelectedLead(lead); setSelectedStallId(''); setAllocateDialogOpen(true); };
+
+  const confirmAllocate = () => {
+    if (selectedLead && selectedStallId) {
+      allocateStallToLead(selectedStallId, selectedLead.id);
+      toast({ title: 'Success', description: `Stall allocated to ${selectedLead.name}` });
+      setAllocateDialogOpen(false);
+    }
+  };
+
+  const availableStalls = getAvailableStalls();
+  const getAssignedStall = (leadId: string) => stalls.find(s => s.lead_id === leadId);
+
   return (
     <MockAppLayout title="Leads" subtitle="Manage enquiries and prospects">
       <div className="space-y-6">
@@ -67,17 +75,47 @@ const Leads = () => {
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4"><div><Label>Name *</Label><Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} /></div><div><Label>Phone *</Label><Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} /></div></div>
                 <div className="grid grid-cols-2 gap-4"><div><Label>Email</Label><Input value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} /></div><div><Label>Company</Label><Input value={formData.company} onChange={(e) => setFormData({ ...formData, company: e.target.value })} /></div></div>
-                <div className="grid grid-cols-3 gap-4"><div><Label>Status</Label><Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as LeadStatus })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="new">New</SelectItem><SelectItem value="follow_up">Follow Up</SelectItem><SelectItem value="interested">Interested</SelectItem><SelectItem value="converted">Converted</SelectItem></SelectContent></Select></div><div><Label>Size</Label><Select value={formData.interested_size} onValueChange={(v) => setFormData({ ...formData, interested_size: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent><SelectItem value="3x3">3x3</SelectItem><SelectItem value="3x6">3x6</SelectItem><SelectItem value="6x6">6x6</SelectItem></SelectContent></Select></div><div><Label>Zone</Label><Select value={formData.interested_zone} onValueChange={(v) => setFormData({ ...formData, interested_zone: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent><SelectItem value="Hall A">Hall A</SelectItem><SelectItem value="Hall B">Hall B</SelectItem></SelectContent></Select></div></div>
+                <div className="grid grid-cols-3 gap-4"><div><Label>Status</Label><Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as LeadStatus })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="new">New</SelectItem><SelectItem value="follow_up">Follow Up</SelectItem><SelectItem value="interested">Interested</SelectItem><SelectItem value="converted">Converted</SelectItem></SelectContent></Select></div><div><Label>Size</Label><Select value={formData.interested_size} onValueChange={(v) => setFormData({ ...formData, interested_size: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent><SelectItem value="3x3">3x3</SelectItem><SelectItem value="3x6">3x6</SelectItem><SelectItem value="6x6">6x6</SelectItem></SelectContent></Select></div><div><Label>Floor</Label><Select value={formData.interested_zone} onValueChange={(v) => setFormData({ ...formData, interested_zone: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent><SelectItem value="Floor 1">Floor 1</SelectItem><SelectItem value="Floor 2">Floor 2</SelectItem></SelectContent></Select></div></div>
                 <div><Label>Notes</Label><Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={2} /></div>
               </div>
               <div className="flex justify-end gap-3"><Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>Cancel</Button><Button onClick={handleSubmit}>{editingLead ? 'Update' : 'Add'}</Button></div>
             </DialogContent>
           </Dialog>
         </div>
-        <Card><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Company</TableHead><TableHead>Status</TableHead><TableHead>Interest</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
-          {filteredLeads.map((lead) => (<TableRow key={lead.id}><TableCell className="font-medium">{lead.name}</TableCell><TableCell><div className="flex flex-col gap-1 text-sm"><span className="flex items-center gap-1"><Phone className="h-3 w-3" />{lead.phone}</span>{lead.email && <span className="flex items-center gap-1 text-muted-foreground"><Mail className="h-3 w-3" />{lead.email}</span>}</div></TableCell><TableCell>{lead.company && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{lead.company}</span>}</TableCell><TableCell><Badge className={statusColors[lead.status]}>{statusLabels[lead.status]}</Badge></TableCell><TableCell><div className="text-sm">{lead.interested_size && <div>Size: {lead.interested_size}</div>}{lead.interested_zone && <div className="text-muted-foreground">{lead.interested_zone}</div>}</div></TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="ghost" size="icon" onClick={() => handleEdit(lead)}><Edit className="h-4 w-4" /></Button>{isAdmin && <Button variant="ghost" size="icon" onClick={() => { deleteLead(lead.id); toast({ title: 'Deleted' }); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div></TableCell></TableRow>))}
+        <Card><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Company</TableHead><TableHead>Status</TableHead><TableHead>Assigned Stall</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
+          {filteredLeads.map((lead) => {
+            const assignedStall = getAssignedStall(lead.id);
+            return (
+              <TableRow key={lead.id}>
+                <TableCell className="font-medium">{lead.name}</TableCell>
+                <TableCell><div className="flex flex-col gap-1 text-sm"><span className="flex items-center gap-1"><Phone className="h-3 w-3" />{lead.phone}</span>{lead.email && <span className="flex items-center gap-1 text-muted-foreground"><Mail className="h-3 w-3" />{lead.email}</span>}</div></TableCell>
+                <TableCell>{lead.company && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{lead.company}</span>}</TableCell>
+                <TableCell><Badge className={statusColors[lead.status]}>{statusLabels[lead.status]}</Badge></TableCell>
+                <TableCell>{assignedStall ? <Badge variant="outline">{assignedStall.stall_number}</Badge> : <Button variant="outline" size="sm" onClick={() => handleAllocate(lead)} disabled={availableStalls.length === 0}><MapPin className="h-3 w-3 mr-1" />Allocate</Button>}</TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="ghost" size="icon" onClick={() => handleEdit(lead)}><Edit className="h-4 w-4" /></Button>{isAdmin && <Button variant="ghost" size="icon" onClick={() => { deleteLead(lead.id); toast({ title: 'Deleted' }); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div></TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody></Table></CardContent></Card>
       </div>
+
+      <Dialog open={allocateDialogOpen} onOpenChange={setAllocateDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Allocate Stall to {selectedLead?.name}</DialogTitle></DialogHeader>
+          <div className="py-4">
+            <Label>Select Available Stall</Label>
+            <Select value={selectedStallId} onValueChange={setSelectedStallId}>
+              <SelectTrigger><SelectValue placeholder="Choose a stall" /></SelectTrigger>
+              <SelectContent>
+                {availableStalls.map(stall => (
+                  <SelectItem key={stall.id} value={stall.id}>{stall.stall_number} - {stall.size} ({stall.zone})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-end gap-3"><Button variant="outline" onClick={() => setAllocateDialogOpen(false)}>Cancel</Button><Button onClick={confirmAllocate} disabled={!selectedStallId}>Allocate Stall</Button></div>
+        </DialogContent>
+      </Dialog>
     </MockAppLayout>
   );
 };
