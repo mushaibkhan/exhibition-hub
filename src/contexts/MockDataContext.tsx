@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import { 
   mockStalls as initialStalls, 
   mockLeads as initialLeads, 
@@ -26,7 +26,6 @@ interface MockDataContextType {
   accounts: Account[];
   serviceAllocations: ServiceAllocation[];
   updateStall: (id: string, updates: Partial<Stall>) => void;
-  allocateStallToLead: (stallId: string, leadId: string) => void;
   addLead: (lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => void;
   updateLead: (id: string, updates: Partial<Lead>) => void;
   deleteLead: (id: string) => void;
@@ -67,12 +66,50 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const isAdmin = role === 'admin';
 
+  // Derive stall statuses from transaction payment status
+  // This runs whenever transactions, transactionItems, or payments change
+  useEffect(() => {
+    setStalls(prevStalls => {
+      return prevStalls.map(stall => {
+        // Find if this stall is in any transaction
+        const txnItem = transactionItems.find(ti => ti.stall_id === stall.id);
+        if (!txnItem) {
+          // Stall not in any transaction - keep as available or blocked
+          if (stall.status !== 'blocked') {
+            return { ...stall, status: 'available' as StallStatus };
+          }
+          return stall;
+        }
+
+        // Find the transaction
+        const txn = transactions.find(t => t.id === txnItem.transaction_id);
+        if (!txn) return stall;
+
+        // Derive stall status from transaction payment status
+        let newStatus: StallStatus;
+        switch (txn.payment_status) {
+          case 'paid':
+            newStatus = 'sold';
+            break;
+          case 'partial':
+            newStatus = 'pending';
+            break;
+          case 'unpaid':
+          default:
+            newStatus = 'reserved'; // Reserved = in transaction but unpaid
+            break;
+        }
+
+        if (stall.status !== newStatus) {
+          return { ...stall, status: newStatus, updated_at: new Date().toISOString() };
+        }
+        return stall;
+      });
+    });
+  }, [transactions, transactionItems]);
+
   const updateStall = useCallback((id: string, updates: Partial<Stall>) => {
     setStalls(prev => prev.map(s => s.id === id ? { ...s, ...updates, updated_at: new Date().toISOString() } : s));
-  }, []);
-
-  const allocateStallToLead = useCallback((stallId: string, leadId: string) => {
-    setStalls(prev => prev.map(s => s.id === stallId ? { ...s, lead_id: leadId, status: 'reserved' as StallStatus, updated_at: new Date().toISOString() } : s));
   }, []);
 
   const addLead = useCallback((lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
@@ -117,35 +154,48 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setServiceAllocations(prev => prev.filter(a => a.id !== id));
   }, [serviceAllocations]);
 
-  const addTransaction = useCallback((transaction: Omit<Transaction, 'id' | 'transaction_number' | 'created_at' | 'updated_at'>, items: Omit<TransactionItem, 'id' | 'transaction_id' | 'created_at'>[]) => {
+  const addTransaction = useCallback((
+    transaction: Omit<Transaction, 'id' | 'transaction_number' | 'created_at' | 'updated_at'>, 
+    items: Omit<TransactionItem, 'id' | 'transaction_id' | 'created_at'>[]
+  ) => {
     const txnId = `txn-${Date.now()}`;
     const txnNumber = `TXN-2024-${String(transactions.length + 1).padStart(3, '0')}`;
-    const newTransaction: Transaction = { ...transaction, id: txnId, transaction_number: txnNumber, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-    const newItems: TransactionItem[] = items.map((item, idx) => ({ ...item, id: `item-${Date.now()}-${idx}`, transaction_id: txnId, created_at: new Date().toISOString() }));
+    const newTransaction: Transaction = { 
+      ...transaction, 
+      id: txnId, 
+      transaction_number: txnNumber, 
+      created_at: new Date().toISOString(), 
+      updated_at: new Date().toISOString() 
+    };
+    const newItems: TransactionItem[] = items.map((item, idx) => ({ 
+      ...item, 
+      id: `item-${Date.now()}-${idx}`, 
+      transaction_id: txnId, 
+      created_at: new Date().toISOString() 
+    }));
+    
     setTransactions(prev => [...prev, newTransaction]);
     setTransactionItems(prev => [...prev, ...newItems]);
-    items.forEach(item => { if (item.stall_id) { updateStall(item.stall_id, { status: transaction.payment_status === 'paid' ? 'sold' : 'pending' }); } });
+    
+    // Mark lead as converted
     updateLead(transaction.lead_id, { status: 'converted' });
-  }, [transactions.length, updateStall, updateLead]);
+  }, [transactions.length, updateLead]);
 
   const updateTransaction = useCallback((id: string, updates: Partial<Transaction>) => {
-    setTransactions(prev => prev.map(t => {
-      if (t.id !== id) return t;
-      if (updates.payment_status) {
-        transactionItems.filter(i => i.transaction_id === id).forEach(item => {
-          if (item.stall_id) updateStall(item.stall_id, { status: updates.payment_status === 'paid' ? 'sold' : 'pending' });
-        });
-      }
-      return { ...t, ...updates, updated_at: new Date().toISOString() };
-    }));
-  }, [transactionItems, updateStall]);
+    setTransactions(prev => prev.map(t => 
+      t.id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t
+    ));
+  }, []);
 
   const addPayment = useCallback((payment: Omit<Payment, 'id' | 'created_at'>) => {
     const newPayment: Payment = { ...payment, id: `pay-${Date.now()}`, created_at: new Date().toISOString() };
     setPayments(prev => [...prev, newPayment]);
+    
+    // Update transaction payment status
     const transaction = transactions.find(t => t.id === payment.transaction_id);
     if (transaction) {
-      const totalPaid = payments.filter(p => p.transaction_id === payment.transaction_id).reduce((sum, p) => sum + p.amount, 0) + payment.amount;
+      const currentPayments = payments.filter(p => p.transaction_id === payment.transaction_id);
+      const totalPaid = currentPayments.reduce((sum, p) => sum + p.amount, 0) + payment.amount;
       const newStatus: PaymentStatus = totalPaid >= transaction.total_amount ? 'paid' : totalPaid > 0 ? 'partial' : 'unpaid';
       updateTransaction(payment.transaction_id, { amount_paid: totalPaid, payment_status: newStatus });
     }
@@ -172,12 +222,12 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const value = useMemo(() => ({
     role, setRole, isAdmin, stalls, leads, services, transactions, transactionItems, payments, accounts, serviceAllocations,
-    updateStall, allocateStallToLead, addLead, updateLead, deleteLead, addService, updateService, deleteService,
+    updateStall, addLead, updateLead, deleteLead, addService, updateService, deleteService,
     addServiceAllocation, removeServiceAllocation, addTransaction, updateTransaction, addPayment, addAccount, updateAccount,
     getLeadById, getStallById, getStallByNumber, getTransactionById, getTransactionsByLeadId, getPaymentsByTransactionId,
     getItemsByTransactionId, getServiceAllocationsByStallId, getServiceById, getAvailableStalls,
   }), [role, isAdmin, stalls, leads, services, transactions, transactionItems, payments, accounts, serviceAllocations,
-    updateStall, allocateStallToLead, addLead, updateLead, deleteLead, addService, updateService, deleteService,
+    updateStall, addLead, updateLead, deleteLead, addService, updateService, deleteService,
     addServiceAllocation, removeServiceAllocation, addTransaction, updateTransaction, addPayment, addAccount, updateAccount,
     getLeadById, getStallById, getStallByNumber, getTransactionById, getTransactionsByLeadId, getPaymentsByTransactionId,
     getItemsByTransactionId, getServiceAllocationsByStallId, getServiceById, getAvailableStalls]);
