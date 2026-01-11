@@ -30,7 +30,7 @@ interface MockDataContextType {
   addLead: (lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => void;
   updateLead: (id: string, updates: Partial<Lead>) => void;
   deleteLead: (id: string) => void;
-  addService: (service: Omit<Service, 'id' | 'created_at' | 'updated_at'>) => void;
+  addService: (service: Omit<Service, 'id' | 'created_at' | 'updated_at'>) => Service;
   updateService: (id: string, updates: Partial<Service>) => void;
   deleteService: (id: string) => void;
   addServiceAllocation: (allocation: Omit<ServiceAllocation, 'id' | 'created_at'>) => void;
@@ -88,9 +88,10 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLeads(prev => prev.filter(l => l.id !== id));
   }, []);
 
-  const addService = useCallback((service: Omit<Service, 'id' | 'created_at' | 'updated_at'>) => {
+  const addService = useCallback((service: Omit<Service, 'id' | 'created_at' | 'updated_at'>): Service => {
     const newService: Service = { ...service, id: `service-${Date.now()}`, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     setServices(prev => [...prev, newService]);
+    return newService;
   }, []);
 
   const updateService = useCallback((id: string, updates: Partial<Service>) => {
