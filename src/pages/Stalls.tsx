@@ -8,61 +8,51 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { StallStatus, Stall } from '@/types/database';
-import { Search, UserPlus, X } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Search, Eye, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const statusColors: Record<StallStatus, string> = { 
   available: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400', 
   reserved: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', 
-  sold: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', 
+  sold: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', 
   pending: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400', 
   blocked: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400' 
 };
-const statusLabels: Record<StallStatus, string> = { available: 'Available', reserved: 'Reserved', sold: 'Sold', pending: 'Pending', blocked: 'Blocked' };
+const statusLabels: Record<StallStatus, string> = { 
+  available: 'Available', 
+  reserved: 'Reserved', 
+  sold: 'Fully Paid', 
+  pending: 'Partial Payment', 
+  blocked: 'Blocked' 
+};
 
 const Stalls = () => {
-  const { stalls, isAdmin, updateStall, leads, getLeadById, getServiceAllocationsByStallId, services } = useMockData();
-  const { toast } = useToast();
+  const { 
+    stalls, isAdmin, 
+    transactions, transactionItems, 
+    getLeadById, getServiceAllocationsByStallId, services,
+    getPaymentsByTransactionId
+  } = useMockData();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [editingStall, setEditingStall] = useState<Stall | null>(null);
-  const [formData, setFormData] = useState({ 
-    lead_id: '' as string | null, 
-    status: 'available' as StallStatus, 
-    notes: '' 
-  });
+  const [viewingStall, setViewingStall] = useState<Stall | null>(null);
 
   const filteredStalls = stalls.filter(s => 
     s.stall_number.toLowerCase().includes(search.toLowerCase()) && 
     (statusFilter === 'all' || s.status === statusFilter)
   );
 
-  const handleEdit = (stall: Stall) => {
-    setEditingStall(stall);
-    setFormData({ 
-      lead_id: stall.lead_id || '', 
-      status: stall.status, 
-      notes: stall.notes || '' 
-    });
-  };
-
-  const handleSave = () => {
-    if (editingStall) {
-      updateStall(editingStall.id, { 
-        lead_id: formData.lead_id || null, 
-        status: formData.status, 
-        notes: formData.notes || null 
-      });
-      toast({ title: 'Success', description: 'Stall assignment updated successfully' });
-      setEditingStall(null);
-    }
-  };
-
-  const handleClearAssignment = () => {
-    setFormData({ ...formData, lead_id: '', status: 'available' });
+  // Get transaction info for a stall
+  const getStallTransactionInfo = (stallId: string) => {
+    const txnItem = transactionItems.find(ti => ti.stall_id === stallId);
+    if (!txnItem) return null;
+    const txn = transactions.find(t => t.id === txnItem.transaction_id);
+    if (!txn) return null;
+    const lead = getLeadById(txn.lead_id);
+    const payments = getPaymentsByTransactionId(txn.id);
+    return { transaction: txn, lead, item: txnItem, payments };
   };
 
   const getServicesForStall = (stallId: string) => {
@@ -73,33 +63,46 @@ const Stalls = () => {
     }).filter(Boolean);
   };
 
+  const handleViewStall = (stall: Stall) => {
+    setViewingStall(stall);
+  };
+
+  const stallInfo = viewingStall ? getStallTransactionInfo(viewingStall.id) : null;
+  const stallServices = viewingStall ? getServicesForStall(viewingStall.id) : [];
+
   return (
-    <MockAppLayout title="Stalls" subtitle="Assign leads to stalls and manage allocations">
+    <MockAppLayout title="Stalls" subtitle="View stall allocations (managed via Transactions)">
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-5">
           <Card><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.length}</div><p className="text-sm text-muted-foreground">Total</p></CardContent></Card>
           <Card className="border-l-4 border-l-emerald-400"><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.filter(s => s.status === 'available').length}</div><p className="text-sm text-muted-foreground">Available</p></CardContent></Card>
-          <Card className="border-l-4 border-l-blue-400"><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.filter(s => s.status === 'sold').length}</div><p className="text-sm text-muted-foreground">Sold</p></CardContent></Card>
-          <Card className="border-l-4 border-l-orange-400"><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.filter(s => s.status === 'pending').length}</div><p className="text-sm text-muted-foreground">Pending</p></CardContent></Card>
+          <Card className="border-l-4 border-l-green-400"><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.filter(s => s.status === 'sold').length}</div><p className="text-sm text-muted-foreground">Fully Paid</p></CardContent></Card>
+          <Card className="border-l-4 border-l-orange-400"><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.filter(s => s.status === 'pending').length}</div><p className="text-sm text-muted-foreground">Partial Payment</p></CardContent></Card>
           <Card className="border-l-4 border-l-yellow-400"><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.filter(s => s.status === 'reserved').length}</div><p className="text-sm text-muted-foreground">Reserved</p></CardContent></Card>
         </div>
 
-        <div className="flex gap-4 flex-wrap">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search stalls..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+        <div className="flex gap-4 flex-wrap items-center justify-between">
+          <div className="flex gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Search stalls..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="available">Available</SelectItem>
+                <SelectItem value="reserved">Reserved</SelectItem>
+                <SelectItem value="sold">Fully Paid</SelectItem>
+                <SelectItem value="pending">Partial Payment</SelectItem>
+                <SelectItem value="blocked">Blocked</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="available">Available</SelectItem>
-              <SelectItem value="reserved">Reserved</SelectItem>
-              <SelectItem value="sold">Sold</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="blocked">Blocked</SelectItem>
-            </SelectContent>
-          </Select>
+          <Button variant="outline" onClick={() => navigate('/transactions')}>
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Go to Transactions
+          </Button>
         </div>
 
         <Card>
@@ -113,14 +116,13 @@ const Stalls = () => {
                   {isAdmin && <TableHead>Base Rent</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead>Assigned To</TableHead>
-                  <TableHead>Services</TableHead>
+                  <TableHead>Transaction</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredStalls.map((stall) => {
-                  const lead = stall.lead_id ? getLeadById(stall.lead_id) : null;
-                  const stallServices = getServicesForStall(stall.id);
+                  const txnInfo = getStallTransactionInfo(stall.id);
                   return (
                     <TableRow key={stall.id}>
                       <TableCell className="font-medium">{stall.stall_number}</TableCell>
@@ -129,26 +131,26 @@ const Stalls = () => {
                       {isAdmin && <TableCell>₹{stall.base_rent.toLocaleString()}</TableCell>}
                       <TableCell><Badge className={statusColors[stall.status]}>{statusLabels[stall.status]}</Badge></TableCell>
                       <TableCell>
-                        {lead ? (
+                        {txnInfo?.lead ? (
                           <div>
-                            <p className="font-medium">{lead.name}</p>
-                            <p className="text-sm text-muted-foreground">{lead.company || lead.phone}</p>
+                            <p className="font-medium">{txnInfo.lead.name}</p>
+                            <p className="text-sm text-muted-foreground">{txnInfo.lead.company || txnInfo.lead.phone}</p>
                           </div>
                         ) : (
-                          <span className="text-muted-foreground">Unassigned</span>
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        {stallServices.length > 0 ? (
-                          <Badge variant="secondary">{stallServices.length} service{stallServices.length > 1 ? 's' : ''}</Badge>
+                        {txnInfo?.transaction ? (
+                          <Badge variant="outline">{txnInfo.transaction.transaction_number}</Badge>
                         ) : (
-                          <span className="text-muted-foreground">None</span>
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(stall)}>
-                          <UserPlus className="h-4 w-4 mr-1" />
-                          Assign
+                        <Button variant="ghost" size="sm" onClick={() => handleViewStall(stall)}>
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -158,89 +160,110 @@ const Stalls = () => {
             </Table>
           </CardContent>
         </Card>
+
+        <p className="text-sm text-muted-foreground text-center">
+          💡 Stalls are allocated through Transactions. Create a transaction to assign a stall to a buyer.
+        </p>
       </div>
 
-      <Dialog open={!!editingStall} onOpenChange={(o) => !o && setEditingStall(null)}>
+      {/* View Stall Details Dialog */}
+      <Dialog open={!!viewingStall} onOpenChange={(o) => !o && setViewingStall(null)}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Assign Person to Stall {editingStall?.stall_number}</DialogTitle>
+            <DialogTitle className="flex items-center gap-3">
+              Stall {viewingStall?.stall_number}
+              {viewingStall && <Badge className={statusColors[viewingStall.status]}>{statusLabels[viewingStall.status]}</Badge>}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {/* Stall Info (read-only) */}
+            {/* Stall Info */}
             <div className="grid grid-cols-3 gap-4 p-3 rounded-lg bg-muted/50">
               <div>
                 <p className="text-xs text-muted-foreground">Size</p>
-                <p className="font-medium">{editingStall?.size}</p>
+                <p className="font-medium">{viewingStall?.size}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Floor</p>
-                <p className="font-medium">{editingStall?.zone}</p>
+                <p className="font-medium">{viewingStall?.zone}</p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Base Rent</p>
-                <p className="font-medium">₹{editingStall?.base_rent.toLocaleString()}</p>
-              </div>
+              {isAdmin && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Base Rent</p>
+                  <p className="font-medium">₹{viewingStall?.base_rent.toLocaleString()}</p>
+                </div>
+              )}
             </div>
 
-            {/* Assign Lead */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Assign Lead / Person</Label>
-                {formData.lead_id && (
-                  <Button variant="ghost" size="sm" onClick={handleClearAssignment} className="h-6 text-xs">
-                    <X className="h-3 w-3 mr-1" />
-                    Clear
-                  </Button>
-                )}
+            {/* Buyer Info */}
+            {stallInfo?.lead && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-muted-foreground">Buyer</h4>
+                <div className="p-3 rounded-lg bg-muted/50 text-sm space-y-1">
+                  <p><span className="text-muted-foreground">Name:</span> {stallInfo.lead.name}</p>
+                  <p><span className="text-muted-foreground">Company:</span> {stallInfo.lead.company || 'N/A'}</p>
+                  <p><span className="text-muted-foreground">Phone:</span> {stallInfo.lead.phone}</p>
+                </div>
               </div>
-              <Select value={formData.lead_id || ''} onValueChange={(v) => setFormData({ ...formData, lead_id: v || null })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a lead to assign" />
-                </SelectTrigger>
-                <SelectContent>
-                  {leads.map((lead) => (
-                    <SelectItem key={lead.id} value={lead.id}>
-                      {lead.name} {lead.company ? `- ${lead.company}` : ''} ({lead.phone})
-                    </SelectItem>
+            )}
+
+            {/* Transaction Info */}
+            {stallInfo?.transaction && isAdmin && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-muted-foreground">Transaction</h4>
+                <div className="p-3 rounded-lg bg-muted/50 text-sm space-y-1">
+                  <p><span className="text-muted-foreground">ID:</span> {stallInfo.transaction.transaction_number}</p>
+                  <p><span className="text-muted-foreground">Total:</span> ₹{stallInfo.transaction.total_amount.toLocaleString()}</p>
+                  <p><span className="text-muted-foreground">Paid:</span> ₹{stallInfo.transaction.amount_paid.toLocaleString()}</p>
+                  <p className="font-medium">
+                    <span className="text-muted-foreground">Pending:</span>{' '}
+                    <span className={stallInfo.transaction.total_amount > stallInfo.transaction.amount_paid ? 'text-orange-600' : 'text-green-600'}>
+                      ₹{(stallInfo.transaction.total_amount - stallInfo.transaction.amount_paid).toLocaleString()}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Services */}
+            {stallServices.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-muted-foreground">Allocated Services</h4>
+                <div className="space-y-1">
+                  {stallServices.map((s: any) => (
+                    <div key={s.id} className="flex justify-between p-2 bg-muted/50 rounded text-sm">
+                      <span>{s.name}</span>
+                      {isAdmin && <span>₹{s.price.toLocaleString()}</span>}
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Leads can be added from the Leads page
-              </p>
-            </div>
+                </div>
+              </div>
+            )}
 
-            {/* Status */}
-            <div className="space-y-2">
-              <Label>Stall Status</Label>
-              <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as StallStatus })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="available">Available</SelectItem>
-                  <SelectItem value="reserved">Reserved</SelectItem>
-                  <SelectItem value="sold">Sold</SelectItem>
-                  <SelectItem value="pending">Payment Pending</SelectItem>
-                  <SelectItem value="blocked">Blocked</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Not Allocated */}
+            {!stallInfo && viewingStall?.status === 'available' && (
+              <div className="text-center py-6 text-muted-foreground">
+                <p>This stall is available.</p>
+                <Button variant="link" onClick={() => { setViewingStall(null); navigate('/transactions'); }}>
+                  Create a transaction to assign it →
+                </Button>
+              </div>
+            )}
 
             {/* Notes */}
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea 
-                value={formData.notes} 
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })} 
-                placeholder="Add notes about this assignment..."
-                rows={3} 
-              />
-            </div>
+            {viewingStall?.notes && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-muted-foreground">Notes</h4>
+                <p className="text-sm p-3 bg-muted/50 rounded-lg">{viewingStall.notes}</p>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setEditingStall(null)}>Cancel</Button>
-            <Button onClick={handleSave}>Save Assignment</Button>
+            {stallInfo?.transaction && (
+              <Button variant="outline" onClick={() => { setViewingStall(null); navigate('/transactions'); }}>
+                View Transaction
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setViewingStall(null)}>Close</Button>
           </div>
         </DialogContent>
       </Dialog>
