@@ -24,6 +24,7 @@ const statusColors: Record<PaymentStatus, string> = {
 const statusLabels: Record<PaymentStatus, string> = { unpaid: 'Unpaid', partial: 'Partial', paid: 'Paid' };
 
 const Transactions = () => {
+  const navigate = useNavigate();
   const { 
     transactions, leads, stalls, services, accounts,
     getLeadById, getItemsByTransactionId, getPaymentsByTransactionId, getAvailableStalls, getStallsByLeadId, getStallById,

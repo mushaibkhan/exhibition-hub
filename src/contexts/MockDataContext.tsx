@@ -1,14 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
-import { 
-  mockStalls as initialStalls, 
-  mockLeads as initialLeads, 
-  mockServices as initialServices,
-  mockTransactions as initialTransactions,
-  mockTransactionItems as initialTransactionItems,
-  mockPayments as initialPayments,
-  mockAccounts as initialAccounts,
-  mockServiceAllocations as initialServiceAllocations,
-} from '@/lib/mockData';
+import { useExhibition } from './ExhibitionContext';
+import { EXHIBITION_DATASETS, ExhibitionDataset } from '@/lib/multiExhibitionData';
 import { Stall, Lead, Service, Transaction, TransactionItem, Payment, Account, StallStatus, LeadStatus, PaymentStatus, ServiceAllocation } from '@/types/database';
 
 type AppRole = 'admin' | 'maintainer';
@@ -52,43 +44,69 @@ interface MockDataContextType {
   getAvailableStalls: () => Stall[];
   getStallsByLeadId: (leadId: string) => Stall[];
   getTransactionsByStallId: (stallId: string) => Transaction[];
+  // Exhibition info
+  currentExhibitionId: string;
 }
 
 const MockDataContext = createContext<MockDataContextType | undefined>(undefined);
 
+// Deep clone helper to prevent cross-exhibition data pollution
+const cloneDataset = (dataset: ExhibitionDataset): ExhibitionDataset => ({
+  stalls: JSON.parse(JSON.stringify(dataset.stalls)),
+  leads: JSON.parse(JSON.stringify(dataset.leads)),
+  services: JSON.parse(JSON.stringify(dataset.services)),
+  transactions: JSON.parse(JSON.stringify(dataset.transactions)),
+  transactionItems: JSON.parse(JSON.stringify(dataset.transactionItems)),
+  payments: JSON.parse(JSON.stringify(dataset.payments)),
+  accounts: JSON.parse(JSON.stringify(dataset.accounts)),
+  serviceAllocations: JSON.parse(JSON.stringify(dataset.serviceAllocations)),
+});
+
 export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentExhibition } = useExhibition();
   const [role, setRole] = useState<AppRole>('admin');
-  const [stalls, setStalls] = useState<Stall[]>(initialStalls);
-  const [leads, setLeads] = useState<Lead[]>(initialLeads);
-  const [services, setServices] = useState<Service[]>(initialServices);
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
-  const [transactionItems, setTransactionItems] = useState<TransactionItem[]>(initialTransactionItems);
-  const [payments, setPayments] = useState<Payment[]>(initialPayments);
-  const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
-  const [serviceAllocations, setServiceAllocations] = useState<ServiceAllocation[]>(initialServiceAllocations);
+  
+  // Store datasets per exhibition - keyed by exhibition ID
+  const [exhibitionDatasets, setExhibitionDatasets] = useState<Record<string, ExhibitionDataset>>(() => {
+    // Initialize with cloned datasets for each exhibition
+    const datasets: Record<string, ExhibitionDataset> = {};
+    Object.keys(EXHIBITION_DATASETS).forEach(key => {
+      datasets[key] = cloneDataset(EXHIBITION_DATASETS[key]);
+    });
+    return datasets;
+  });
+
+  // Get current exhibition's dataset
+  const currentDataset = exhibitionDatasets[currentExhibition.id] || cloneDataset(EXHIBITION_DATASETS[currentExhibition.id]);
+  
+  const { stalls, leads, services, transactions, transactionItems, payments, accounts, serviceAllocations } = currentDataset;
 
   const isAdmin = role === 'admin';
+  const currentExhibitionId = currentExhibition.id;
+
+  // Helper to update current exhibition's dataset
+  const updateDataset = useCallback((updater: (dataset: ExhibitionDataset) => ExhibitionDataset) => {
+    setExhibitionDatasets(prev => ({
+      ...prev,
+      [currentExhibitionId]: updater(prev[currentExhibitionId] || currentDataset),
+    }));
+  }, [currentExhibitionId, currentDataset]);
 
   // Derive stall statuses from transaction payment status
-  // This runs whenever transactions, transactionItems, or payments change
   useEffect(() => {
-    setStalls(prevStalls => {
-      return prevStalls.map(stall => {
-        // Find if this stall is in any transaction
-        const txnItem = transactionItems.find(ti => ti.stall_id === stall.id);
+    updateDataset(dataset => {
+      const newStalls = dataset.stalls.map(stall => {
+        const txnItem = dataset.transactionItems.find(ti => ti.stall_id === stall.id);
         if (!txnItem) {
-          // Stall not in any transaction - keep as available or blocked
           if (stall.status !== 'blocked') {
             return { ...stall, status: 'available' as StallStatus };
           }
           return stall;
         }
 
-        // Find the transaction
-        const txn = transactions.find(t => t.id === txnItem.transaction_id);
+        const txn = dataset.transactions.find(t => t.id === txnItem.transaction_id);
         if (!txn) return stall;
 
-        // Derive stall status from transaction payment status
         let newStatus: StallStatus;
         switch (txn.payment_status) {
           case 'paid':
@@ -99,7 +117,7 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             break;
           case 'unpaid':
           default:
-            newStatus = 'reserved'; // Reserved = in transaction but unpaid
+            newStatus = 'reserved';
             break;
         }
 
@@ -108,147 +126,207 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
         return stall;
       });
+
+      if (JSON.stringify(newStalls) !== JSON.stringify(dataset.stalls)) {
+        return { ...dataset, stalls: newStalls };
+      }
+      return dataset;
     });
-  }, [transactions, transactionItems]);
+  }, [transactions, transactionItems, updateDataset]);
 
   const updateStall = useCallback((id: string, updates: Partial<Stall>) => {
-    setStalls(prev => prev.map(s => s.id === id ? { ...s, ...updates, updated_at: new Date().toISOString() } : s));
-  }, []);
+    updateDataset(dataset => ({
+      ...dataset,
+      stalls: dataset.stalls.map(s => s.id === id ? { ...s, ...updates, updated_at: new Date().toISOString() } : s),
+    }));
+  }, [updateDataset]);
 
   const addLead = useCallback((lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
-    const newLead: Lead = { ...lead, id: `lead-${Date.now()}`, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-    setLeads(prev => [...prev, newLead]);
-  }, []);
+    const newLead: Lead = { ...lead, id: `${currentExhibitionId}-lead-${Date.now()}`, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    updateDataset(dataset => ({
+      ...dataset,
+      leads: [...dataset.leads, newLead],
+    }));
+  }, [updateDataset, currentExhibitionId]);
 
   const updateLead = useCallback((id: string, updates: Partial<Lead>) => {
-    setLeads(prev => prev.map(l => l.id === id ? { ...l, ...updates, updated_at: new Date().toISOString() } : l));
-  }, []);
+    updateDataset(dataset => ({
+      ...dataset,
+      leads: dataset.leads.map(l => l.id === id ? { ...l, ...updates, updated_at: new Date().toISOString() } : l),
+    }));
+  }, [updateDataset]);
 
   const deleteLead = useCallback((id: string) => {
-    setLeads(prev => prev.filter(l => l.id !== id));
-  }, []);
+    updateDataset(dataset => ({
+      ...dataset,
+      leads: dataset.leads.filter(l => l.id !== id),
+    }));
+  }, [updateDataset]);
 
   const addService = useCallback((service: Omit<Service, 'id' | 'created_at' | 'updated_at'>): Service => {
-    const newService: Service = { ...service, id: `service-${Date.now()}`, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-    setServices(prev => [...prev, newService]);
+    const newService: Service = { ...service, id: `${currentExhibitionId}-service-${Date.now()}`, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    updateDataset(dataset => ({
+      ...dataset,
+      services: [...dataset.services, newService],
+    }));
     return newService;
-  }, []);
+  }, [updateDataset, currentExhibitionId]);
 
   const updateService = useCallback((id: string, updates: Partial<Service>) => {
-    setServices(prev => prev.map(s => s.id === id ? { ...s, ...updates, updated_at: new Date().toISOString() } : s));
-  }, []);
+    updateDataset(dataset => ({
+      ...dataset,
+      services: dataset.services.map(s => s.id === id ? { ...s, ...updates, updated_at: new Date().toISOString() } : s),
+    }));
+  }, [updateDataset]);
 
   const deleteService = useCallback((id: string) => {
-    setServices(prev => prev.filter(s => s.id !== id));
-    setServiceAllocations(prev => prev.filter(a => a.service_id !== id));
-  }, []);
+    updateDataset(dataset => ({
+      ...dataset,
+      services: dataset.services.filter(s => s.id !== id),
+      serviceAllocations: dataset.serviceAllocations.filter(a => a.service_id !== id),
+    }));
+  }, [updateDataset]);
 
   const addServiceAllocation = useCallback((allocation: Omit<ServiceAllocation, 'id' | 'created_at'>) => {
-    const newAllocation: ServiceAllocation = { ...allocation, id: `alloc-${Date.now()}`, created_at: new Date().toISOString() };
-    setServiceAllocations(prev => [...prev, newAllocation]);
-    setServices(prev => prev.map(s => s.id === allocation.service_id ? { ...s, sold_quantity: s.sold_quantity + allocation.quantity } : s));
-  }, []);
+    const newAllocation: ServiceAllocation = { ...allocation, id: `${currentExhibitionId}-alloc-${Date.now()}`, created_at: new Date().toISOString() };
+    updateDataset(dataset => ({
+      ...dataset,
+      serviceAllocations: [...dataset.serviceAllocations, newAllocation],
+      services: dataset.services.map(s => s.id === allocation.service_id ? { ...s, sold_quantity: s.sold_quantity + allocation.quantity } : s),
+    }));
+  }, [updateDataset, currentExhibitionId]);
 
   const removeServiceAllocation = useCallback((id: string) => {
-    const allocation = serviceAllocations.find(a => a.id === id);
-    if (allocation) {
-      setServices(prev => prev.map(s => s.id === allocation.service_id ? { ...s, sold_quantity: Math.max(0, s.sold_quantity - allocation.quantity) } : s));
-    }
-    setServiceAllocations(prev => prev.filter(a => a.id !== id));
-  }, [serviceAllocations]);
+    updateDataset(dataset => {
+      const allocation = dataset.serviceAllocations.find(a => a.id === id);
+      if (!allocation) return dataset;
+      return {
+        ...dataset,
+        serviceAllocations: dataset.serviceAllocations.filter(a => a.id !== id),
+        services: dataset.services.map(s => s.id === allocation.service_id ? { ...s, sold_quantity: Math.max(0, s.sold_quantity - allocation.quantity) } : s),
+      };
+    });
+  }, [updateDataset]);
 
   const addTransaction = useCallback((
     transaction: Omit<Transaction, 'id' | 'transaction_number' | 'created_at' | 'updated_at'>, 
     items: Omit<TransactionItem, 'id' | 'transaction_id' | 'created_at'>[],
     selectedStallId?: string
   ) => {
-    const txnId = `txn-${Date.now()}`;
-    const txnNumber = `TXN-2024-${String(transactions.length + 1).padStart(3, '0')}`;
-    const newTransaction: Transaction = { 
-      ...transaction, 
-      id: txnId, 
-      transaction_number: txnNumber, 
-      created_at: new Date().toISOString(), 
-      updated_at: new Date().toISOString() 
-    };
-    const newItems: TransactionItem[] = items.map((item, idx) => ({ 
-      ...item, 
-      id: `item-${Date.now()}-${idx}`, 
-      transaction_id: txnId, 
-      created_at: new Date().toISOString() 
-    }));
+    const txnId = `${currentExhibitionId}-txn-${Date.now()}`;
     
-    setTransactions(prev => [...prev, newTransaction]);
-    setTransactionItems(prev => [...prev, ...newItems]);
-    
-    // Auto-allocate services to stall
-    // Priority: 1) selectedStallId (service-only transaction), 2) first stall item in transaction
-    let targetStallId: string | null = null;
-    if (selectedStallId) {
-      targetStallId = selectedStallId;
-    } else {
-      const firstStallItem = newItems.find(item => item.item_type === 'stall' && item.stall_id);
-      if (firstStallItem && firstStallItem.stall_id) {
-        targetStallId = firstStallItem.stall_id;
-      }
-    }
-    
-    if (targetStallId) {
-      const serviceItems = newItems.filter(item => item.item_type === 'service' && item.service_id);
-      serviceItems.forEach((serviceItem, idx) => {
-        if (serviceItem.service_id) {
-          const timestamp = new Date().toISOString();
-          const newAllocation: ServiceAllocation = {
-            id: `alloc-${txnId}-${idx}`,
-            service_id: serviceItem.service_id,
-            stall_id: targetStallId!,
-            quantity: 1,
-            created_at: timestamp
-          };
-          setServiceAllocations(prev => [...prev, newAllocation]);
-          // Update service sold_quantity
-          setServices(prev => prev.map(s => s.id === serviceItem.service_id ? { ...s, sold_quantity: s.sold_quantity + 1 } : s));
+    updateDataset(dataset => {
+      const txnNumber = `TXN-${currentExhibitionId.toUpperCase().substring(0, 4)}-${String(dataset.transactions.length + 1).padStart(3, '0')}`;
+      const newTransaction: Transaction = { 
+        ...transaction, 
+        id: txnId, 
+        transaction_number: txnNumber, 
+        created_at: new Date().toISOString(), 
+        updated_at: new Date().toISOString() 
+      };
+      const newItems: TransactionItem[] = items.map((item, idx) => ({ 
+        ...item, 
+        id: `${currentExhibitionId}-item-${Date.now()}-${idx}`, 
+        transaction_id: txnId, 
+        created_at: new Date().toISOString() 
+      }));
+      
+      // Auto-allocate services to stall
+      let targetStallId: string | null = null;
+      if (selectedStallId) {
+        targetStallId = selectedStallId;
+      } else {
+        const firstStallItem = newItems.find(item => item.item_type === 'stall' && item.stall_id);
+        if (firstStallItem && firstStallItem.stall_id) {
+          targetStallId = firstStallItem.stall_id;
         }
-      });
-    }
-    
-    // Mark lead as converted only if not already converted
-    setLeads(prevLeads => {
-      const currentLead = prevLeads.find(l => l.id === transaction.lead_id);
-      if (currentLead && currentLead.status !== 'converted') {
-        return prevLeads.map(l => l.id === transaction.lead_id ? { ...l, status: 'converted' as LeadStatus } : l);
       }
-      return prevLeads;
+      
+      let newAllocations = [...dataset.serviceAllocations];
+      let newServices = [...dataset.services];
+      
+      if (targetStallId) {
+        const serviceItems = newItems.filter(item => item.item_type === 'service' && item.service_id);
+        serviceItems.forEach((serviceItem, idx) => {
+          if (serviceItem.service_id) {
+            const timestamp = new Date().toISOString();
+            const newAllocation: ServiceAllocation = {
+              id: `${currentExhibitionId}-alloc-${txnId}-${idx}`,
+              service_id: serviceItem.service_id,
+              stall_id: targetStallId!,
+              quantity: 1,
+              created_at: timestamp
+            };
+            newAllocations.push(newAllocation);
+            newServices = newServices.map(s => s.id === serviceItem.service_id ? { ...s, sold_quantity: s.sold_quantity + 1 } : s);
+          }
+        });
+      }
+      
+      // Mark lead as converted
+      const newLeads = dataset.leads.map(l => {
+        if (l.id === transaction.lead_id && l.status !== 'converted') {
+          return { ...l, status: 'converted' as LeadStatus };
+        }
+        return l;
+      });
+
+      return {
+        ...dataset,
+        transactions: [...dataset.transactions, newTransaction],
+        transactionItems: [...dataset.transactionItems, ...newItems],
+        serviceAllocations: newAllocations,
+        services: newServices,
+        leads: newLeads,
+      };
     });
-  }, [transactions.length]);
+  }, [updateDataset, currentExhibitionId]);
 
   const updateTransaction = useCallback((id: string, updates: Partial<Transaction>) => {
-    setTransactions(prev => prev.map(t => 
-      t.id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t
-    ));
-  }, []);
+    updateDataset(dataset => ({
+      ...dataset,
+      transactions: dataset.transactions.map(t => 
+        t.id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t
+      ),
+    }));
+  }, [updateDataset]);
 
   const addPayment = useCallback((payment: Omit<Payment, 'id' | 'created_at'>) => {
-    const newPayment: Payment = { ...payment, id: `pay-${Date.now()}`, created_at: new Date().toISOString() };
-    setPayments(prev => [...prev, newPayment]);
+    const newPayment: Payment = { ...payment, id: `${currentExhibitionId}-pay-${Date.now()}`, created_at: new Date().toISOString() };
     
-    // Update transaction payment status
-    const transaction = transactions.find(t => t.id === payment.transaction_id);
-    if (transaction) {
-      const currentPayments = payments.filter(p => p.transaction_id === payment.transaction_id);
+    updateDataset(dataset => {
+      const transaction = dataset.transactions.find(t => t.id === payment.transaction_id);
+      if (!transaction) {
+        return { ...dataset, payments: [...dataset.payments, newPayment] };
+      }
+      
+      const currentPayments = dataset.payments.filter(p => p.transaction_id === payment.transaction_id);
       const totalPaid = currentPayments.reduce((sum, p) => sum + p.amount, 0) + payment.amount;
       const newStatus: PaymentStatus = totalPaid >= transaction.total_amount ? 'paid' : totalPaid > 0 ? 'partial' : 'unpaid';
-      updateTransaction(payment.transaction_id, { amount_paid: totalPaid, payment_status: newStatus });
-    }
-  }, [transactions, payments, updateTransaction]);
+      
+      return {
+        ...dataset,
+        payments: [...dataset.payments, newPayment],
+        transactions: dataset.transactions.map(t => 
+          t.id === payment.transaction_id ? { ...t, amount_paid: totalPaid, payment_status: newStatus, updated_at: new Date().toISOString() } : t
+        ),
+      };
+    });
+  }, [updateDataset, currentExhibitionId]);
 
   const addAccount = useCallback((account: Omit<Account, 'id' | 'created_at' | 'updated_at'>) => {
-    setAccounts(prev => [...prev, { ...account, id: `account-${Date.now()}`, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }]);
-  }, []);
+    updateDataset(dataset => ({
+      ...dataset,
+      accounts: [...dataset.accounts, { ...account, id: `${currentExhibitionId}-account-${Date.now()}`, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
+    }));
+  }, [updateDataset, currentExhibitionId]);
 
   const updateAccount = useCallback((id: string, updates: Partial<Account>) => {
-    setAccounts(prev => prev.map(a => a.id === id ? { ...a, ...updates, updated_at: new Date().toISOString() } : a));
-  }, []);
+    updateDataset(dataset => ({
+      ...dataset,
+      accounts: dataset.accounts.map(a => a.id === id ? { ...a, ...updates, updated_at: new Date().toISOString() } : a),
+    }));
+  }, [updateDataset]);
 
   // Sort leads by created_at DESC (newest first)
   const sortedLeads = useMemo(() => {
@@ -281,9 +359,7 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const getServiceById = useCallback((id: string) => services.find(s => s.id === id), [services]);
   const getAvailableStalls = useCallback(() => stalls.filter(s => s.status === 'available'), [stalls]);
   const getStallsByLeadId = useCallback((leadId: string) => {
-    // Find all transactions for this lead
     const leadTransactions = sortedTransactions.filter(t => t.lead_id === leadId);
-    // Get all transaction items that are stalls
     const stallItemIds = new Set<string>();
     leadTransactions.forEach(txn => {
       const items = transactionItems.filter(i => i.transaction_id === txn.id && i.item_type === 'stall' && i.stall_id);
@@ -291,7 +367,6 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (item.stall_id) stallItemIds.add(item.stall_id);
       });
     });
-    // Get unique stalls and sort by stall_number
     const leadStalls = Array.from(stallItemIds)
       .map(stallId => stalls.find(s => s.id === stallId))
       .filter((s): s is Stall => s !== undefined)
@@ -306,15 +381,11 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [sortedTransactions, transactionItems]);
 
   const getServiceAllocationsByTransactionId = useCallback((transactionId: string) => {
-    // Get stall IDs from transaction items
     const stallIds = new Set<string>();
     const txnItems = transactionItems.filter(i => i.transaction_id === transactionId && i.stall_id);
     txnItems.forEach(item => {
       if (item.stall_id) stallIds.add(item.stall_id);
     });
-    // Get service allocations for those stalls that were created as part of this transaction
-    // We can't directly link allocations to transactions, so we return all allocations for the stalls in this transaction
-    // The caller can filter by created_at if needed
     return sortedServiceAllocations.filter(a => stallIds.has(a.stall_id));
   }, [sortedServiceAllocations, transactionItems]);
 
@@ -324,11 +395,13 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addServiceAllocation, removeServiceAllocation, addTransaction, updateTransaction, addPayment, addAccount, updateAccount,
     getLeadById, getStallById, getStallByNumber, getTransactionById, getTransactionsByLeadId, getPaymentsByTransactionId,
     getItemsByTransactionId, getServiceAllocationsByStallId, getServiceAllocationsByTransactionId, getServiceById, getAvailableStalls, getStallsByLeadId, getTransactionsByStallId,
+    currentExhibitionId,
   }), [role, isAdmin, stalls, sortedLeads, services, sortedTransactions, transactionItems, sortedPayments, accounts, sortedServiceAllocations,
     updateStall, addLead, updateLead, deleteLead, addService, updateService, deleteService,
     addServiceAllocation, removeServiceAllocation, addTransaction, updateTransaction, addPayment, addAccount, updateAccount,
     getLeadById, getStallById, getStallByNumber, getTransactionById, getTransactionsByLeadId, getPaymentsByTransactionId,
-    getItemsByTransactionId, getServiceAllocationsByStallId, getServiceAllocationsByTransactionId, getServiceById, getAvailableStalls, getStallsByLeadId, getTransactionsByStallId]);
+    getItemsByTransactionId, getServiceAllocationsByStallId, getServiceAllocationsByTransactionId, getServiceById, getAvailableStalls, getStallsByLeadId, getTransactionsByStallId,
+    currentExhibitionId]);
 
   return <MockDataContext.Provider value={value}>{children}</MockDataContext.Provider>;
 };
