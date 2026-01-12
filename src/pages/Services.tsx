@@ -7,13 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Service, ServiceCategory } from '@/types/database';
-import { Search, Sparkles, Package, Utensils, PlusCircle, Plus, Edit, Store } from 'lucide-react';
+import { Search, Sparkles, Package, Utensils, PlusCircle, Edit, Store } from 'lucide-react';
 
 const categoryColors: Record<ServiceCategory, string> = { 
   sponsor: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400', 
@@ -25,7 +25,7 @@ const categoryLabels: Record<ServiceCategory, string> = { sponsor: 'Sponsor', si
 const categoryIcons: Record<ServiceCategory, React.ElementType> = { sponsor: Sparkles, signboard: Package, food_court: Utensils, add_on: PlusCircle };
 
 const Services = () => {
-  const { services, isAdmin, addService, updateService, stalls, addServiceAllocation, serviceAllocations, getServiceAllocationsByStallId, getLeadById } = useMockData();
+  const { services, isAdmin, updateService, stalls, serviceAllocations, getServiceAllocationsByStallId, getLeadById } = useMockData();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -38,8 +38,7 @@ const Services = () => {
     price: 0, 
     quantity: 1, 
     is_unlimited: false, 
-    notes: '',
-    stall_id: '' // Required stall assignment when adding
+    notes: ''
   });
 
   const filteredServices = services.filter(s => 
@@ -55,7 +54,7 @@ const Services = () => {
   };
 
   const resetForm = () => { 
-    setFormData({ name: '', category: 'add_on', description: '', price: 0, quantity: 1, is_unlimited: false, notes: '', stall_id: '' }); 
+    setFormData({ name: '', category: 'add_on', description: '', price: 0, quantity: 1, is_unlimited: false, notes: '' }); 
     setEditingService(null); 
   };
 
@@ -64,46 +63,22 @@ const Services = () => {
       toast({ title: 'Error', description: 'Service name is required', variant: 'destructive' }); 
       return; 
     }
-    
-    if (!editingService && !formData.stall_id) {
-      toast({ title: 'Error', description: 'Please select a stall to assign this service', variant: 'destructive' }); 
+
+    if (!editingService) {
+      toast({ title: 'Error', description: 'Services can only be added through transactions', variant: 'destructive' });
       return;
     }
 
-    if (editingService) { 
-      updateService(editingService.id, {
-        name: formData.name,
-        category: formData.category,
-        description: formData.description,
-        price: formData.price,
-        quantity: formData.quantity,
-        is_unlimited: formData.is_unlimited,
-        notes: formData.notes
-      }); 
-      toast({ title: 'Success', description: 'Service updated' }); 
-    } else { 
-      const newService = addService({ 
-        name: formData.name,
-        category: formData.category,
-        description: formData.description,
-        price: formData.price,
-        quantity: formData.quantity,
-        is_unlimited: formData.is_unlimited,
-        notes: formData.notes,
-        sold_quantity: 0 
-      });
-      
-      // Immediately allocate to selected stall
-      if (newService && formData.stall_id) {
-        addServiceAllocation({ 
-          service_id: newService.id, 
-          stall_id: formData.stall_id, 
-          quantity: 1 
-        });
-        const stall = stalls.find(s => s.id === formData.stall_id);
-        toast({ title: 'Success', description: `${formData.name} added and assigned to ${stall?.stall_number}` }); 
-      }
-    }
+    updateService(editingService.id, {
+      name: formData.name,
+      category: formData.category,
+      description: formData.description,
+      price: formData.price,
+      quantity: formData.quantity,
+      is_unlimited: formData.is_unlimited,
+      notes: formData.notes
+    }); 
+    toast({ title: 'Success', description: 'Service updated' }); 
     setDialogOpen(false); 
     resetForm();
   };
@@ -117,8 +92,7 @@ const Services = () => {
       price: service.price, 
       quantity: service.quantity, 
       is_unlimited: service.is_unlimited, 
-      notes: service.notes || '',
-      stall_id: ''
+      notes: service.notes || ''
     }); 
     setDialogOpen(true); 
   };
@@ -132,11 +106,6 @@ const Services = () => {
     const lead = stall.lead_id ? getLeadById(stall.lead_id) : null;
     return { stall, lead, quantity: allocation.quantity };
   };
-
-  // Only show stalls that are sold, reserved, or pending for service allocation
-  const allocatableStalls = stalls.filter(s => 
-    s.status === 'sold' || s.status === 'pending' || s.status === 'reserved'
-  );
 
   return (
     <MockAppLayout title="Services" subtitle="Add-on services assigned to stalls">
@@ -176,14 +145,12 @@ const Services = () => {
             </SelectContent>
           </Select>
           {isAdmin && (
-            <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
-              <DialogTrigger asChild>
-                <Button><Plus className="mr-2 h-4 w-4" />Add Service</Button>
-              </DialogTrigger>
+            <Dialog open={dialogOpen && !!editingService} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
               <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                  <DialogTitle>{editingService ? 'Edit' : 'Add'} Service</DialogTitle>
+                  <DialogTitle>Edit Service</DialogTitle>
                 </DialogHeader>
+                {editingService && (
                 <div className="space-y-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -208,34 +175,6 @@ const Services = () => {
                     </div>
                   </div>
 
-                  {/* Stall Assignment - Required for new services */}
-                  {!editingService && (
-                    <div className="space-y-2">
-                      <Label>Assign to Stall *</Label>
-                      <Select value={formData.stall_id} onValueChange={(v) => setFormData({ ...formData, stall_id: v })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a stall" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allocatableStalls.length === 0 ? (
-                            <SelectItem value="" disabled>No stalls available (must be sold/reserved/pending)</SelectItem>
-                          ) : (
-                            allocatableStalls.map(stall => {
-                              const lead = stall.lead_id ? getLeadById(stall.lead_id) : null;
-                              return (
-                                <SelectItem key={stall.id} value={stall.id}>
-                                  {stall.stall_number} - {stall.zone} {lead ? `(${lead.name})` : ''}
-                                </SelectItem>
-                              );
-                            })
-                          )}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Services must be assigned to a stall. Only sold, reserved, or pending stalls are available.
-                      </p>
-                    </div>
-                  )}
 
                   <div className="space-y-2">
                     <Label>Description</Label>
@@ -286,10 +225,13 @@ const Services = () => {
                     />
                   </div>
                 </div>
+                )}
+                {editingService && (
                 <div className="flex justify-end gap-3">
                   <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>Cancel</Button>
-                  <Button onClick={handleSubmit}>{editingService ? 'Update' : 'Add Service'}</Button>
+                  <Button onClick={handleSubmit}>Update Service</Button>
                 </div>
+                )}
               </DialogContent>
             </Dialog>
           )}

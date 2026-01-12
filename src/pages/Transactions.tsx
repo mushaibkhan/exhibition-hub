@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
 import { useMockData } from '@/contexts/MockDataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { PaymentStatus, PaymentMode, Lead, TransactionItem } from '@/types/database';
-import { Search, ChevronDown, ChevronUp, Plus, CreditCard, Receipt } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Plus, CreditCard, Receipt, ShoppingCart, PlusCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
@@ -25,7 +26,7 @@ const statusLabels: Record<PaymentStatus, string> = { unpaid: 'Unpaid', partial:
 const Transactions = () => {
   const { 
     transactions, leads, stalls, services, accounts,
-    getLeadById, getItemsByTransactionId, getPaymentsByTransactionId, getAvailableStalls,
+    getLeadById, getItemsByTransactionId, getPaymentsByTransactionId, getAvailableStalls, getStallsByLeadId, getStallById,
     addTransaction, addPayment,
     isAdmin 
   } = useMockData();
@@ -43,6 +44,7 @@ const Transactions = () => {
     name: string;
     price: number;
   }>>([]);
+  const [selectedStallForServices, setSelectedStallForServices] = useState<string>('');
   const [txnNotes, setTxnNotes] = useState('');
 
   // Add Payment Dialog
@@ -54,8 +56,20 @@ const Transactions = () => {
   const [paymentAccount, setPaymentAccount] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
 
-  const convertedLeads = leads.filter(l => l.status !== 'converted' && l.status !== 'not_interested');
   const availableStalls = getAvailableStalls();
+  
+  // Check if selected lead owns any stalls
+  const leadOwnedStalls = selectedLead ? getStallsByLeadId(selectedLead) : [];
+  const leadOwnsStalls = leadOwnedStalls.length > 0;
+  const hasStallsInTransaction = selectedItems.some(i => i.type === 'stall');
+  const hasServicesInTransaction = selectedItems.some(i => i.type === 'service');
+  
+  // Determine if we should hide the "Add Stall" selector
+  // Hide when: lead owns stalls AND services are selected AND no stalls in transaction
+  const shouldHideStallSelector = leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction;
+  
+  // Available stalls for selection (filter out already owned ones)
+  const availableStallsForLead = availableStalls.filter(s => !leadOwnedStalls.some(owned => owned.id === s.id));
 
   const filteredTxns = transactions.filter(t => { 
     const lead = getLeadById(t.lead_id); 
@@ -70,15 +84,21 @@ const Transactions = () => {
   };
 
   const handleAddItem = (type: 'stall' | 'service', id: string) => {
+    if (!id) return;
+    
     if (type === 'stall') {
-      const stall = stalls.find(s => s.id === id);
+      const stall = stalls?.find(s => s.id === id);
       if (stall && !selectedItems.find(i => i.id === id)) {
         setSelectedItems([...selectedItems, { type, id, name: `Stall ${stall.stall_number}`, price: stall.base_rent }]);
+        // Clear selectedStallForServices if a stall is added (stall in transaction takes precedence)
+        if (selectedStallForServices) {
+          setSelectedStallForServices('');
+        }
       }
-    } else {
-      const service = services.find(s => s.id === id);
+    } else if (type === 'service') {
+      const service = services?.find(s => s && s.id === id);
       if (service && !selectedItems.find(i => i.id === id)) {
-        setSelectedItems([...selectedItems, { type, id, name: service.name, price: service.price }]);
+        setSelectedItems([...selectedItems, { type, id, name: service.name || 'Unknown Service', price: service.price || 0 }]);
       }
     }
   };
@@ -89,9 +109,64 @@ const Transactions = () => {
 
   const totalAmount = selectedItems.reduce((sum, i) => sum + i.price, 0);
 
+  // Determine transaction type
+  const transactionType = (!leadOwnsStalls || hasStallsInTransaction) 
+    ? 'New Stall Purchase' 
+    : 'Service Add-on (Existing Stall)';
+
   const handleCreateTransaction = () => {
     if (!selectedLead || selectedItems.length === 0) {
-      toast({ title: 'Error', description: 'Please select a lead and at least one item', variant: 'destructive' });
+      toast({ 
+        title: 'Missing Information', 
+        description: 'Please select a buyer and add at least one item (stall or service) to create a transaction.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    // Validate: If services-only transaction, require stall selection
+    const hasServices = selectedItems.some(i => i.type === 'service');
+    const hasStalls = selectedItems.some(i => i.type === 'stall');
+    if (hasServices && !hasStalls && !selectedStallForServices) {
+      toast({ 
+        title: 'Stall Selection Required', 
+        description: 'Services must be allocated to a stall. Please select an existing stall from the dropdown below to apply the services.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    // Defensive validation: Prevent re-selling a stall that the lead already owns
+    if (hasStalls) {
+      const selectedStallIds = selectedItems.filter(i => i.type === 'stall').map(i => i.id);
+      const ownedStallIds = leadOwnedStalls.map(s => s.id);
+      const isReSellingOwnedStall = selectedStallIds.some(stallId => ownedStallIds.includes(stallId));
+      
+      if (isReSellingOwnedStall) {
+        const duplicateStalls = selectedStallIds.filter(id => ownedStallIds.includes(id));
+        const stallNumbers = duplicateStalls
+          .map(id => stalls.find(s => s.id === id)?.stall_number)
+          .filter(Boolean)
+          .join(', ');
+        const lead = getLeadById(selectedLead);
+        const leadName = lead?.name || 'this buyer';
+        
+        toast({ 
+          title: 'Stall Already Owned', 
+          description: `Stall${duplicateStalls.length > 1 ? 's' : ''} ${stallNumbers} ${duplicateStalls.length > 1 ? 'are' : 'is'} already owned by ${leadName}. ${hasServices ? 'To add services, remove the duplicate stall(s) and select an existing stall from the dropdown below.' : 'To add services for existing stalls, use a service add-on transaction instead.'}`, 
+          variant: 'destructive' 
+        });
+        return;
+      }
+    }
+    
+    // Additional validation: If lead owns stalls and services are selected without a stall allocation
+    if (leadOwnsStalls && hasServices && !hasStalls && !selectedStallForServices) {
+      toast({ 
+        title: 'Stall Selection Required', 
+        description: `Please select an existing stall from the dropdown to allocate the services. This buyer owns ${leadOwnedStalls.length} stall${leadOwnedStalls.length > 1 ? 's' : ''} already.`, 
+        variant: 'destructive' 
+      });
       return;
     }
 
@@ -106,6 +181,13 @@ const Transactions = () => {
       final_price: item.price,
     }));
 
+    // Determine selectedStallId: use selectedStallForServices if services-only, otherwise undefined
+    const isServiceOnly = hasServices && !hasStalls;
+    const selectedStallId = isServiceOnly ? selectedStallForServices : undefined;
+
+    // Calculate transaction number before creating (since it's based on current count)
+    const txnNumber = `TXN-2024-${String(transactions.length + 1).padStart(3, '0')}`;
+    
     addTransaction({
       lead_id: selectedLead,
       total_amount: totalAmount,
@@ -113,12 +195,30 @@ const Transactions = () => {
       payment_status: 'unpaid',
       notes: txnNotes || null,
       created_by: null,
-    }, items);
+    }, items, selectedStallId);
 
-    toast({ title: 'Success', description: 'Transaction created successfully' });
+    // Enhanced toast messages
+    const lead = getLeadById(selectedLead);
+    const leadName = lead?.name || 'Buyer';
+    const stallItems = selectedItems.filter(i => i.type === 'stall');
+    const serviceItems = selectedItems.filter(i => i.type === 'service');
+    
+    let toastMessage = '';
+    if (stallItems.length > 0) {
+      const stallNumbers = stallItems.map(i => i.name.replace('Stall ', '')).join(', ');
+      toastMessage = `Stall ${stallNumbers} sold to ${leadName}. Transaction: ${txnNumber}`;
+    } else if (serviceItems.length > 0 && selectedStallId) {
+      const stall = getStallById(selectedStallId);
+      toastMessage = `Services added to Stall ${stall?.stall_number || 'selected'}. Transaction: ${txnNumber}`;
+    } else {
+      toastMessage = `Transaction created successfully. Transaction: ${txnNumber}`;
+    }
+    
+    toast({ title: 'Success', description: toastMessage });
     setCreateDialogOpen(false);
     setSelectedLead('');
     setSelectedItems([]);
+    setSelectedStallForServices('');
     setTxnNotes('');
   };
 
@@ -215,11 +315,32 @@ const Transactions = () => {
                   return (
                     <>
                       <TableRow key={txn.id} className="cursor-pointer" onClick={() => setExpandedRow(isExpanded ? null : txn.id)}>
-                        <TableCell>{isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</TableCell>
-                        <TableCell className="font-medium">{txn.transaction_number}</TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>{isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</TableCell>
+                        <TableCell 
+                          className="font-medium hover:text-primary hover:underline cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedRow(txn.id);
+                            // Scroll to this row
+                            setTimeout(() => {
+                              const element = document.getElementById(`txn-${txn.id}`);
+                              element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 100);
+                          }}
+                        >
+                          {txn.transaction_number}
+                        </TableCell>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{lead?.name}</p>
+                            <p 
+                              className="font-medium hover:text-primary hover:underline cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate('/leads');
+                              }}
+                            >
+                              {lead?.name}
+                            </p>
                             <p className="text-sm text-muted-foreground">{lead?.company}</p>
                           </div>
                         </TableCell>
@@ -244,16 +365,28 @@ const Transactions = () => {
                             <div className="grid gap-4 md:grid-cols-2">
                               <div>
                                 <h4 className="font-semibold mb-2">Line Items</h4>
-                                {items.map(i => (
-                                  <div key={i.id} className="flex justify-between text-sm p-2 bg-background rounded mb-1">
-                                    <span className="flex items-center gap-2">
-                                      <Receipt className="h-3 w-3 text-muted-foreground" />
-                                      {i.item_name}
-                                      {i.size && <span className="text-muted-foreground">({i.size})</span>}
-                                    </span>
-                                    {isAdmin && <span>₹{i.final_price.toLocaleString()}</span>}
-                                  </div>
-                                ))}
+                                {items.map(i => {
+                                  const isStall = i.item_type === 'stall';
+                                  return (
+                                    <div key={i.id} className="flex justify-between text-sm p-2 bg-background rounded mb-1">
+                                      <span className="flex items-center gap-2">
+                                        <Receipt className="h-3 w-3 text-muted-foreground" />
+                                        {isStall ? (
+                                          <span 
+                                            className="hover:text-primary hover:underline cursor-pointer"
+                                            onClick={() => navigate('/', { state: { stallId: i.stall_id } })}
+                                          >
+                                            {i.item_name}
+                                          </span>
+                                        ) : (
+                                          i.item_name
+                                        )}
+                                        {i.size && <span className="text-muted-foreground">({i.size})</span>}
+                                      </span>
+                                      {isAdmin && <span>₹{i.final_price.toLocaleString()}</span>}
+                                    </div>
+                                  );
+                                })}
                               </div>
                               {isAdmin && (
                                 <div>
@@ -287,84 +420,281 @@ const Transactions = () => {
       </div>
 
       {/* Create Transaction Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+      <Dialog open={createDialogOpen} onOpenChange={(open) => {
+        setCreateDialogOpen(open);
+        if (!open) {
+          setSelectedLead('');
+          setSelectedItems([]);
+          setSelectedStallForServices('');
+          setTxnNotes('');
+        }
+      }}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Transaction</DialogTitle>
+            {selectedLead && (
+              <div className="pt-3 pb-1">
+                <Badge variant="secondary" className="text-sm font-medium flex items-center gap-1.5 w-fit">
+                  {transactionType === 'New Stall Purchase' ? (
+                    <ShoppingCart className="h-3.5 w-3.5" />
+                  ) : (
+                    <PlusCircle className="h-3.5 w-3.5" />
+                  )}
+                  {transactionType}
+                </Badge>
+              </div>
+            )}
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            {/* Select Lead */}
-            <div className="space-y-2">
-              <Label>Select Buyer (Lead)</Label>
+          <div className="space-y-6 py-4">
+            {/* 1. Buyer Selection */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-muted-foreground">1. Buyer</h3>
+              <div className="space-y-2">
+                <Label>Select Buyer (Lead)</Label>
               <Select value={selectedLead} onValueChange={setSelectedLead}>
                 <SelectTrigger>
                   <SelectValue placeholder="Choose a lead..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {convertedLeads.map(lead => (
+                  {leads.filter(l => l.status !== 'not_interested').map(lead => (
                     <SelectItem key={lead.id} value={lead.id}>
                       {lead.name} {lead.company ? `- ${lead.company}` : ''} ({lead.phone})
+                      {lead.status === 'converted' ? ' (Has existing transaction)' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">Only leads that are not yet converted are shown</p>
+              <p className="text-xs text-muted-foreground">
+                Converted leads can have multiple transactions. Each transaction creates a separate record with its own payment tracking.
+              </p>
+              
+              {/* Owned Stalls Display */}
+              {leadOwnsStalls && selectedLead && (
+                <div className="mt-2 p-2 bg-muted/50 rounded-lg">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Owns:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {leadOwnedStalls.map((stall, idx) => (
+                      <Button
+                        key={stall.id}
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs px-2 py-0"
+                        onClick={() => {
+                          setCreateDialogOpen(false);
+                          navigate('/stalls');
+                          // Could navigate to specific stall detail if route exists
+                        }}
+                      >
+                        {stall.stall_number} ({stall.zone})
+                        {idx < leadOwnedStalls.length - 1 && <span className="ml-1">,</span>}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              </div>
             </div>
 
-            {/* Add Stalls */}
-            <div className="space-y-2">
-              <Label>Add Stall</Label>
-              <Select onValueChange={(v) => handleAddItem('stall', v)} value="">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a stall to add..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableStalls.map(stall => (
-                    <SelectItem key={stall.id} value={stall.id} disabled={selectedItems.some(i => i.id === stall.id)}>
-                      {stall.stall_number} ({stall.size}) - ₹{stall.base_rent.toLocaleString()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Add Services */}
-            <div className="space-y-2">
-              <Label>Add Service/Add-on</Label>
-              <Select onValueChange={(v) => handleAddItem('service', v)} value="">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a service to add..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.filter(s => s.is_unlimited || s.sold_quantity < s.quantity).map(service => (
-                    <SelectItem key={service.id} value={service.id} disabled={selectedItems.some(i => i.id === service.id)}>
-                      {service.name} - ₹{service.price.toLocaleString()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Selected Items */}
-            {selectedItems.length > 0 && (
+            {/* 2. What are they buying? */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-muted-foreground">2. What are they buying?</h3>
+              
+              {/* Buy New Stall - Hide when lead owns stalls and is adding services only */}
+            {!shouldHideStallSelector && (
               <div className="space-y-2">
-                <Label>Selected Items</Label>
-                <div className="border rounded-lg p-3 space-y-2">
-                  {selectedItems.map(item => (
-                    <div key={item.id} className="flex items-center justify-between p-2 bg-muted rounded">
-                      <span className="text-sm">
-                        <Badge variant="outline" className="mr-2">{item.type}</Badge>
-                        {item.name}
-                      </span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium">₹{item.price.toLocaleString()}</span>
-                        <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="h-6 w-6 p-0 text-destructive">
-                          ×
-                        </Button>
+                <Label>Buy New Stall</Label>
+                <Select 
+                  onValueChange={(v) => handleAddItem('stall', v)} 
+                  value=""
+                  disabled={leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction}
+                >
+                  <SelectTrigger className={leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction ? 'opacity-50 cursor-not-allowed' : ''}>
+                    <SelectValue placeholder={
+                      leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction
+                        ? "This buyer already owns stalls. Add services only."
+                        : "Select a stall to add..."
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableStallsForLead.length === 0 ? (
+                      <SelectItem value="" disabled>
+                        {leadOwnsStalls 
+                          ? "All available stalls are already owned. Remove services to add new stalls."
+                          : "No available stalls"}
+                      </SelectItem>
+                    ) : (
+                      availableStallsForLead.map(stall => (
+                        <SelectItem key={stall.id} value={stall.id} disabled={selectedItems.some(i => i.id === stall.id)}>
+                          {stall.stall_number} ({stall.size}) - ₹{stall.base_rent.toLocaleString()}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction && (
+                  <div className="p-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                    <p className="text-xs font-medium text-amber-900 dark:text-amber-100">
+                      Service-only transaction mode
+                    </p>
+                    <p className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
+                      This buyer already owns {leadOwnedStalls.length} stall{leadOwnedStalls.length > 1 ? 's' : ''}. 
+                      The stall selector is disabled because you're adding services only. The selected stall will not be charged again. 
+                      Select an existing stall below to allocate services.
+                    </p>
+                  </div>
+                )}
+                {leadOwnsStalls && !hasServicesInTransaction && (
+                  <p className="text-xs text-muted-foreground">
+                    This buyer already owns {leadOwnedStalls.length} stall{leadOwnedStalls.length > 1 ? 's' : ''}. 
+                    You can add additional stalls or services.
+                  </p>
+                )}
+              </div>
+            )}
+
+              {/* Add Services */}
+              <div className="space-y-2">
+                <Label>Add Services</Label>
+                <Select onValueChange={(v) => handleAddItem('service', v)} value="">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a service to add..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services && services.length > 0 ? (
+                      services.filter(s => s && (s.is_unlimited || (s.sold_quantity !== undefined && s.quantity !== undefined && s.sold_quantity < s.quantity))).map(service => (
+                        <SelectItem key={service.id} value={service.id} disabled={selectedItems.some(i => i.id === service.id)}>
+                          {service.name} - ₹{(service.price || 0).toLocaleString()}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>No services available</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* 3. Where does it apply? */}
+            {selectedLead && hasServicesInTransaction && !hasStallsInTransaction && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground">3. Where does it apply?</h3>
+                <div className="space-y-2">
+                  <Label>Apply Services To Stall *</Label>
+                <Select value={selectedStallForServices} onValueChange={setSelectedStallForServices}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose an existing stall..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      try {
+                        const leadStalls = selectedLead ? getStallsByLeadId(selectedLead) : [];
+                        if (!leadStalls || leadStalls.length === 0) {
+                          return (
+                            <SelectItem value="" disabled>
+                              {leadOwnsStalls 
+                                ? "No stalls found for this buyer. Add a stall to this transaction or select a different buyer."
+                                : "This buyer doesn't own any stalls yet. Please add a stall to this transaction first."}
+                            </SelectItem>
+                          );
+                        }
+                        return leadStalls.map(stall => (
+                          <SelectItem key={stall.id} value={stall.id}>
+                            {stall.stall_number} ({stall.size}) - {stall.zone}
+                          </SelectItem>
+                        ));
+                      } catch (error) {
+                        console.error('Error getting stalls for lead:', error);
+                        return (
+                          <SelectItem value="" disabled>
+                            Error loading stalls
+                          </SelectItem>
+                        );
+                      }
+                    })()}
+                  </SelectContent>
+                </Select>
+                <div className="p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                  <p className="text-xs font-medium text-blue-900 dark:text-blue-100">
+                    Service allocation required
+                  </p>
+                  <p className="text-xs text-blue-800 dark:text-blue-200 mt-0.5">
+                    {leadOwnsStalls 
+                      ? `Services must be allocated to one of the ${leadOwnedStalls.length} stall${leadOwnedStalls.length > 1 ? 's' : ''} this buyer already owns. The selected stall will not be added to the transaction total—only the service charges will apply.`
+                      : "Services must be allocated to a stall. If this buyer doesn't own a stall, add one to this transaction first."}
+                  </p>
+                </div>
+                </div>
+              </div>
+            )}
+
+            {/* 4. Summary & Payment */}
+            {selectedItems.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground">4. Summary & Payment</h3>
+                <div className="border rounded-lg p-4 space-y-4">
+                  {/* Stall Purchase Section */}
+                  {selectedItems.filter(i => i.type === 'stall').length > 0 && (
+                    <div className="space-y-2 pb-3 border-b">
+                      <h4 className="text-sm font-semibold text-foreground">Stall Purchase</h4>
+                      <div className="space-y-1">
+                        {selectedItems.filter(i => i.type === 'stall').map(item => (
+                          <div key={item.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                            <span className="text-sm">{item.name}</span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-medium">₹{item.price.toLocaleString()}</span>
+                              <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="h-6 w-6 p-0 text-destructive">
+                                ×
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-end pt-1">
+                        <span className="text-xs text-muted-foreground">
+                          Subtotal: <span className="font-semibold text-foreground">₹{selectedItems.filter(i => i.type === 'stall').reduce((sum, i) => sum + i.price, 0).toLocaleString()}</span>
+                        </span>
                       </div>
                     </div>
-                  ))}
-                  <div className="flex justify-between pt-2 border-t font-semibold">
+                  )}
+
+                  {/* Services Section */}
+                  {selectedItems.filter(i => i.type === 'service').length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold text-foreground">Services</h4>
+                      {(selectedStallForServices || selectedItems.find(i => i.type === 'stall')) && (
+                        <div className="p-2 bg-primary/5 border border-primary/20 rounded-md mb-2">
+                          <p className="text-xs font-medium text-primary">
+                            Services will be applied to <strong>
+                              {selectedStallForServices 
+                                ? getStallById(selectedStallForServices)?.stall_number
+                                : selectedItems.find(i => i.type === 'stall')?.name.replace('Stall ', '')}
+                            </strong>
+                          </p>
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        {selectedItems.filter(i => i.type === 'service').map(item => (
+                          <div key={item.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                            <span className="text-sm">{item.name}</span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-medium">₹{item.price.toLocaleString()}</span>
+                              <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="h-6 w-6 p-0 text-destructive">
+                                ×
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-end pt-1">
+                        <span className="text-xs text-muted-foreground">
+                          Subtotal: <span className="font-semibold text-foreground">₹{selectedItems.filter(i => i.type === 'service').reduce((sum, i) => sum + i.price, 0).toLocaleString()}</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Total */}
+                  <div className="flex justify-between pt-3 border-t font-semibold">
                     <span>Total</span>
                     <span>₹{totalAmount.toLocaleString()}</span>
                   </div>
@@ -378,7 +708,7 @@ const Transactions = () => {
               <Textarea value={txnNotes} onChange={(e) => setTxnNotes(e.target.value)} placeholder="Add notes..." rows={2} />
             </div>
           </div>
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleCreateTransaction} disabled={!selectedLead || selectedItems.length === 0}>
               Create Transaction

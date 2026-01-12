@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
 import { StallBox } from '@/components/floor/StallBox';
 import { FloorLegend } from '@/components/floor/FloorLegend';
@@ -8,9 +9,22 @@ import { Stall } from '@/types/database';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index = () => {
-  const { stalls, getLeadById, transactions } = useMockData();
+  const { stalls, getLeadById, transactions, getServiceAllocationsByStallId, getTransactionsByStallId } = useMockData();
+  const location = useLocation();
   const [selectedStall, setSelectedStall] = useState<Stall | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Handle navigation state to auto-open stall drawer
+  useEffect(() => {
+    const stallId = (location.state as any)?.stallId;
+    if (stallId) {
+      const stall = stalls.find(s => s.id === stallId);
+      if (stall) {
+        setSelectedStall(stall);
+        setDrawerOpen(true);
+      }
+    }
+  }, [location.state, stalls]);
 
   const handleStallClick = (stall: Stall) => {
     setSelectedStall(stall);
@@ -21,19 +35,45 @@ const Index = () => {
   const floor2Stalls = stalls.filter(s => s.zone === 'Floor 2');
 
   const getStallInfo = (stall: Stall) => {
+    const stallTransactions = getTransactionsByStallId(stall.id);
+    const services = getServiceAllocationsByStallId(stall.id);
+    const hasServices = services.length > 0;
+    const serviceCount = services.length;
+    
+    // Check for pending payments across all transactions for this stall
+    const hasPendingPayment = stallTransactions.some(txn => txn.payment_status !== 'paid');
+    
     if (stall.lead_id) {
       const lead = getLeadById(stall.lead_id);
-      const txn = transactions.find(t => t.lead_id === stall.lead_id);
-      return { assignedTo: lead?.name, amountPaid: txn?.amount_paid, totalAmount: txn?.total_amount };
+      // Use the first transaction for legacy compatibility (or sum all)
+      const firstTxn = stallTransactions[0];
+      return { 
+        assignedTo: lead?.name, 
+        amountPaid: firstTxn?.amount_paid || 0, 
+        totalAmount: firstTxn?.total_amount || 0,
+        hasServices,
+        hasPendingPayment,
+        serviceCount
+      };
     }
-    return {};
+    return { hasServices, hasPendingPayment: false, serviceCount };
   };
 
   const renderFloorGrid = (floorStalls: Stall[], cols: number, rows: number) => (
     <div className="grid gap-1 p-4 bg-muted/30 rounded-lg overflow-auto" style={{ gridTemplateColumns: `repeat(${cols}, minmax(50px, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(50px, auto))` }}>
       {floorStalls.map((stall) => {
         const info = getStallInfo(stall);
-        return <StallBox key={stall.id} stall={stall} assignedTo={info.assignedTo} amountPaid={info.amountPaid} totalAmount={info.totalAmount} onClick={() => handleStallClick(stall)} />;
+        return <StallBox 
+          key={stall.id} 
+          stall={stall} 
+          assignedTo={info.assignedTo} 
+          amountPaid={info.amountPaid} 
+          totalAmount={info.totalAmount}
+          hasServices={info.hasServices}
+          hasPendingPayment={info.hasPendingPayment}
+          serviceCount={info.serviceCount}
+          onClick={() => handleStallClick(stall)} 
+        />;
       })}
     </div>
   );

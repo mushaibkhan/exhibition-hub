@@ -125,7 +125,12 @@ const Stalls = () => {
                   const txnInfo = getStallTransactionInfo(stall.id);
                   return (
                     <TableRow key={stall.id}>
-                      <TableCell className="font-medium">{stall.stall_number}</TableCell>
+                      <TableCell 
+                        className="font-medium hover:text-primary hover:underline cursor-pointer"
+                        onClick={() => navigate('/', { state: { stallId: stall.id } })}
+                      >
+                        {stall.stall_number}
+                      </TableCell>
                       <TableCell>{stall.size}</TableCell>
                       <TableCell>{stall.zone}</TableCell>
                       {isAdmin && <TableCell>₹{stall.base_rent.toLocaleString()}</TableCell>}
@@ -142,7 +147,13 @@ const Stalls = () => {
                       </TableCell>
                       <TableCell>
                         {txnInfo?.transaction ? (
-                          <Badge variant="outline">{txnInfo.transaction.transaction_number}</Badge>
+                          <Badge 
+                            variant="outline" 
+                            className="cursor-pointer hover:bg-muted hover:text-primary"
+                            onClick={() => navigate('/transactions', { state: { highlightTransaction: txnInfo.transaction.id } })}
+                          >
+                            {txnInfo.transaction.transaction_number}
+                          </Badge>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

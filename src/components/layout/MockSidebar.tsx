@@ -18,18 +18,27 @@ interface NavItem {
   path: string;
   icon: React.ElementType;
   adminOnly?: boolean;
+  section?: string; // Optional section label
 }
 
+// Reordered to follow operational workflow
 const navItems: NavItem[] = [
-  { label: 'Floor Layout', path: '/', icon: LayoutGrid },
+  // Top level - Dashboard
   { label: 'Dashboard', path: '/dashboard', icon: BarChart3, adminOnly: true },
-  { label: 'Leads', path: '/leads', icon: Users },
-  { label: 'Stalls', path: '/stalls', icon: Square },
-  { label: 'Services', path: '/services', icon: Package },
-  { label: 'Transactions', path: '/transactions', icon: Receipt },
-  { label: 'Payments', path: '/payments', icon: CreditCard, adminOnly: true },
-  { label: 'Accounts', path: '/accounts', icon: Building2, adminOnly: true },
-  { label: 'Users', path: '/users', icon: UserCog, adminOnly: true },
+  { label: 'Floor Layout', path: '/', icon: LayoutGrid },
+  
+  // Operations section
+  { label: 'Leads', path: '/leads', icon: Users, section: 'Operations' },
+  { label: 'Transactions', path: '/transactions', icon: Receipt, section: 'Operations' },
+  { label: 'Payments', path: '/payments', icon: CreditCard, adminOnly: true, section: 'Operations' },
+  
+  // Reference section
+  { label: 'Stalls', path: '/stalls', icon: Square, section: 'Reference' },
+  { label: 'Services', path: '/services', icon: Package, section: 'Reference' },
+  
+  // Admin section
+  { label: 'Accounts', path: '/accounts', icon: Building2, adminOnly: true, section: 'Admin' },
+  { label: 'Users', path: '/users', icon: UserCog, adminOnly: true, section: 'Admin' },
 ];
 
 export const MockSidebar = () => {
@@ -56,26 +65,87 @@ export const MockSidebar = () => {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {filteredNavItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            const Icon = item.icon;
+          {(() => {
+            const filteredItems = navItems.filter(item => !item.adminOnly || isAdmin);
+            const groupedItems: { [key: string]: NavItem[] } = {};
+            const topLevelItems: NavItem[] = [];
+            
+            // Group items by section
+            filteredItems.forEach(item => {
+              if (item.section) {
+                if (!groupedItems[item.section]) {
+                  groupedItems[item.section] = [];
+                }
+                groupedItems[item.section].push(item);
+              } else {
+                topLevelItems.push(item);
+              }
+            });
             
             return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                    : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                )}
-              >
-                <Icon className="h-5 w-5" />
-                {item.label}
-              </Link>
+              <>
+                {/* Top level items (Dashboard, Floor Layout) */}
+                {topLevelItems.map((item) => {
+                  const isActive = location.pathname === item.path;
+                  const Icon = item.icon;
+                  
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+                
+                {/* Grouped sections */}
+                {['Operations', 'Reference', 'Admin'].map((sectionName) => {
+                  const sectionItems = groupedItems[sectionName] || [];
+                  if (sectionItems.length === 0) return null;
+                  
+                  return (
+                    <div key={sectionName} className="mt-4 first:mt-0">
+                      <div className="px-3 py-2">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+                          {sectionName}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        {sectionItems.map((item) => {
+                          const isActive = location.pathname === item.path;
+                          const Icon = item.icon;
+                          
+                          return (
+                            <Link
+                              key={item.path}
+                              to={item.path}
+                              className={cn(
+                                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                                isActive
+                                  ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                                  : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                              )}
+                            >
+                              <Icon className="h-5 w-5" />
+                              {item.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
             );
-          })}
+          })()}
         </nav>
 
         {/* Role indicator */}
