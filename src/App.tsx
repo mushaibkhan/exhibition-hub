@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ExhibitionProvider } from "@/contexts/ExhibitionContext";
 import { MockDataProvider } from "@/contexts/MockDataContext";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
@@ -19,26 +20,28 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <MockDataProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/leads" element={<Leads />} />
-            <Route path="/stalls" element={<Stalls />} />
-            <Route path="/services" element={<Services />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/payments" element={<Payments />} />
-            <Route path="/accounts" element={<Accounts />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </MockDataProvider>
+    <ExhibitionProvider>
+      <MockDataProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/leads" element={<Leads />} />
+              <Route path="/stalls" element={<Stalls />} />
+              <Route path="/services" element={<Services />} />
+              <Route path="/transactions" element={<Transactions />} />
+              <Route path="/payments" element={<Payments />} />
+              <Route path="/accounts" element={<Accounts />} />
+              <Route path="/users" element={<Users />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </MockDataProvider>
+    </ExhibitionProvider>
   </QueryClientProvider>
 );
 
