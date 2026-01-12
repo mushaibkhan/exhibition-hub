@@ -8,8 +8,8 @@ import { Shield, User, Users } from 'lucide-react';
 
 const mockUsers = [
   { id: '1', email: 'admin@expo.com', full_name: 'Admin User', role: 'admin', created_at: '2024-01-01' },
-  { id: '2', email: 'maintainer1@expo.com', full_name: 'John Doe', role: 'maintainer', created_at: '2024-01-05' },
-  { id: '3', email: 'maintainer2@expo.com', full_name: 'Jane Smith', role: 'maintainer', created_at: '2024-01-10' },
+  { id: '2', email: 'maintainer1@expo.com', full_name: 'Sanjay Agarwal', role: 'maintainer', created_at: '2024-01-05' },
+  { id: '3', email: 'maintainer2@expo.com', full_name: 'Dilip Kumar', role: 'maintainer', created_at: '2024-01-10' },
 ];
 
 const UsersPage = () => {

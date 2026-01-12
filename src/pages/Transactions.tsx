@@ -9,10 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { PaymentStatus, PaymentMode, Lead, TransactionItem } from '@/types/database';
-import { Search, ChevronDown, ChevronUp, Plus, CreditCard, Receipt, ShoppingCart, PlusCircle } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Plus, CreditCard, Receipt, ShoppingCart, PlusCircle, X, Trash2, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
@@ -26,9 +27,9 @@ const statusLabels: Record<PaymentStatus, string> = { unpaid: 'Unpaid', partial:
 const Transactions = () => {
   const navigate = useNavigate();
   const { 
-    transactions, leads, stalls, services, accounts,
+    transactions, leads, stalls, services, accounts, transactionItems,
     getLeadById, getItemsByTransactionId, getPaymentsByTransactionId, getAvailableStalls, getStallsByLeadId, getStallById,
-    addTransaction, addPayment,
+    addTransaction, addPayment, cancelTransaction, removeServiceFromTransaction, deletePayment,
     isAdmin 
   } = useMockData();
   const { toast } = useToast();
@@ -57,6 +58,12 @@ const Transactions = () => {
   const [paymentAccount, setPaymentAccount] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
 
+  // Confirmation dialogs
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelTxnId, setCancelTxnId] = useState<string>('');
+  const [deletePaymentDialogOpen, setDeletePaymentDialogOpen] = useState(false);
+  const [deletePaymentId, setDeletePaymentId] = useState<string>('');
+
   const availableStalls = getAvailableStalls();
   
   // Check if selected lead owns any stalls
@@ -71,6 +78,9 @@ const Transactions = () => {
   
   // Available stalls for selection (filter out already owned ones)
   const availableStallsForLead = availableStalls.filter(s => !leadOwnedStalls.some(owned => owned.id === s.id));
+  
+  // Disable Create Transaction button if no items selected or no lead selected
+  const canCreateTransaction = selectedItems.length > 0 && selectedLead;
 
   const filteredTxns = transactions.filter(t => { 
     const lead = getLeadById(t.lead_id); 
@@ -87,20 +97,72 @@ const Transactions = () => {
   const handleAddItem = (type: 'stall' | 'service', id: string) => {
     if (!id) return;
     
+    // Check for duplicates
+    if (selectedItems.some(i => i.id === id)) {
+      toast({
+        title: 'Item Already Added',
+        description: 'This item is already in the transaction. Each item can only be added once.',
+        variant: 'default',
+        duration: 3000
+      });
+      return;
+    }
+    
     if (type === 'stall') {
       const stall = stalls?.find(s => s.id === id);
-      if (stall && !selectedItems.find(i => i.id === id)) {
-        setSelectedItems([...selectedItems, { type, id, name: `Stall ${stall.stall_number}`, price: stall.base_rent }]);
-        // Clear selectedStallForServices if a stall is added (stall in transaction takes precedence)
-        if (selectedStallForServices) {
-          setSelectedStallForServices('');
-        }
+      if (!stall) {
+        toast({
+          title: 'Stall Not Found',
+          description: 'The selected stall could not be found.',
+          variant: 'destructive'
+        });
+        return;
+      }
+      
+      // Check if stall is already sold (ignore cancelled transactions)
+      const isSold = transactionItems.some(item => {
+        if (item.item_type !== 'stall' || item.stall_id !== id) return false;
+        const txn = transactions.find(t => t.id === item.transaction_id);
+        return txn && !txn.cancelled; // Only count non-cancelled transactions
+      });
+      
+      if (isSold) {
+        toast({
+          title: 'Stall Already Sold',
+          description: `Stall ${stall.stall_number} has already been sold. Please select a different stall.`,
+          variant: 'destructive'
+        });
+        return;
+      }
+      
+      setSelectedItems([...selectedItems, { type, id, name: `Stall ${stall.stall_number}`, price: stall.base_rent }]);
+      // Clear selectedStallForServices if a stall is added (stall in transaction takes precedence)
+      if (selectedStallForServices) {
+        setSelectedStallForServices('');
       }
     } else if (type === 'service') {
       const service = services?.find(s => s && s.id === id);
-      if (service && !selectedItems.find(i => i.id === id)) {
-        setSelectedItems([...selectedItems, { type, id, name: service.name || 'Unknown Service', price: service.price || 0 }]);
+      if (!service) {
+        toast({
+          title: 'Service Not Found',
+          description: 'The selected service could not be found.',
+          variant: 'destructive'
+        });
+        return;
       }
+      
+      // Check if service is sold out
+      const isSoldOut = !service.is_unlimited && service.sold_quantity >= service.quantity;
+      if (isSoldOut) {
+        toast({
+          title: 'Service Sold Out',
+          description: `${service.name} is sold out and cannot be added to transactions.`,
+          variant: 'destructive'
+        });
+        return;
+      }
+      
+      setSelectedItems([...selectedItems, { type, id, name: service.name || 'Unknown Service', price: service.price || 0 }]);
     }
   };
 
@@ -171,6 +233,36 @@ const Transactions = () => {
       return;
     }
 
+    // Defensive validation: Ensure no stall is being re-sold (check for any transaction items)
+    if (hasStalls) {
+      const stallIdsInTransaction = selectedItems
+        .filter(i => i.type === 'stall')
+        .map(i => i.id);
+
+      const alreadySoldStalls = stallIdsInTransaction.filter(stallId => {
+        // Check if this stall has any transaction items from non-cancelled transactions
+        return transactionItems.some(item => {
+          if (item.item_type !== 'stall' || item.stall_id !== stallId) return false;
+          const txn = transactions.find(t => t.id === item.transaction_id);
+          return txn && !txn.cancelled; // Only count non-cancelled transactions
+        });
+      });
+
+      if (alreadySoldStalls.length > 0) {
+        const stallNumbers = alreadySoldStalls
+          .map(id => stalls.find(s => s.id === id)?.stall_number)
+          .filter(Boolean)
+          .join(', ');
+        
+        toast({
+          title: 'Stall Already Sold',
+          description: `Stall${alreadySoldStalls.length > 1 ? 's' : ''} ${stallNumbers} ${alreadySoldStalls.length > 1 ? 'are' : 'is'} already sold. Please select a different stall.`,
+          variant: 'destructive'
+        });
+        return;
+      }
+    }
+
     const items: Omit<TransactionItem, 'id' | 'transaction_id' | 'created_at'>[] = selectedItems.map(item => ({
       item_type: item.type,
       item_name: item.name,
@@ -224,15 +316,74 @@ const Transactions = () => {
   };
 
   const handleOpenPaymentDialog = (txnId: string) => {
+    const txn = transactions.find(t => t.id === txnId);
+    if (txn?.cancelled) {
+      toast({
+        title: 'Transaction Cancelled',
+        description: 'Payments cannot be added to cancelled transactions.',
+        variant: 'destructive'
+      });
+      return;
+    }
     setPaymentTxnId(txnId);
     setPaymentDialogOpen(true);
   };
 
   const handleAddPayment = () => {
     const amount = parseFloat(paymentAmount);
-    if (!amount || amount <= 0) {
-      toast({ title: 'Error', description: 'Please enter a valid amount', variant: 'destructive' });
+    
+    // Validate amount is a positive number
+    if (!amount || amount <= 0 || isNaN(amount)) {
+      toast({ 
+        title: 'Invalid Amount', 
+        description: 'Please enter a valid payment amount greater than zero.', 
+        variant: 'destructive' 
+      });
       return;
+    }
+
+    // Get transaction and calculate pending amount
+    const txn = transactions.find(t => t.id === paymentTxnId);
+    if (!txn) {
+      toast({ 
+        title: 'Transaction Not Found', 
+        description: 'The selected transaction could not be found.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    // Check if transaction is cancelled
+    if (txn.cancelled) {
+      toast({ 
+        title: 'Transaction Cancelled', 
+        description: 'Payments cannot be added to cancelled transactions.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    const pendingAmount = txn.total_amount - txn.amount_paid;
+    
+    // Validate payment doesn't exceed pending amount
+    if (amount > pendingAmount) {
+      toast({ 
+        title: 'Payment Exceeds Pending Amount', 
+        description: `Payment amount (₹${amount.toLocaleString()}) cannot exceed pending amount of ₹${pendingAmount.toLocaleString()}. Please enter an amount up to ₹${pendingAmount.toLocaleString()}.`, 
+        variant: 'destructive',
+        duration: 6000
+      });
+      return;
+    }
+
+    // Warn if payment is close to pending (within 5%) but suggest exact amount
+    if (amount < pendingAmount && amount >= pendingAmount * 0.95) {
+      toast({ 
+        title: 'Payment Amount Suggestion', 
+        description: `You're close to the full amount. The exact pending amount is ₹${pendingAmount.toLocaleString()}.`, 
+        variant: 'default',
+        duration: 4000
+      });
     }
 
     addPayment({
@@ -246,7 +397,15 @@ const Transactions = () => {
       recorded_by: null,
     });
 
-    toast({ title: 'Success', description: 'Payment recorded successfully' });
+    const newPending = pendingAmount - amount;
+    const successMessage = newPending === 0 
+      ? `Payment of ₹${amount.toLocaleString()} recorded. Transaction is now fully paid.`
+      : `Payment of ₹${amount.toLocaleString()} recorded. ₹${newPending.toLocaleString()} remaining.`;
+
+    toast({ 
+      title: 'Payment Recorded Successfully', 
+      description: successMessage 
+    });
     setPaymentDialogOpen(false);
     setPaymentAmount('');
     setPaymentMode('cash');
@@ -347,15 +506,27 @@ const Transactions = () => {
                         </TableCell>
                         {isAdmin && <TableCell>₹{txn.total_amount.toLocaleString()}</TableCell>}
                         {isAdmin && <TableCell>₹{txn.amount_paid.toLocaleString()}</TableCell>}
-                        <TableCell><Badge className={statusColors[txn.payment_status]}>{statusLabels[txn.payment_status]}</Badge></TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Badge className={statusColors[txn.payment_status]}>{statusLabels[txn.payment_status]}</Badge>
+                            {txn.cancelled && (
+                              <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300">
+                                Cancelled
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>{format(new Date(txn.created_at), 'dd MMM yyyy')}</TableCell>
                         {isAdmin && (
                           <TableCell onClick={(e) => e.stopPropagation()}>
-                            {txn.payment_status !== 'paid' && (
+                            {!txn.cancelled && txn.payment_status !== 'paid' && (
                               <Button size="sm" variant="outline" onClick={() => handleOpenPaymentDialog(txn.id)}>
                                 <CreditCard className="h-4 w-4 mr-1" />
                                 Add Payment
                               </Button>
+                            )}
+                            {txn.cancelled && (
+                              <span className="text-xs text-muted-foreground italic">Cancelled</span>
                             )}
                           </TableCell>
                         )}
@@ -363,31 +534,77 @@ const Transactions = () => {
                       {isExpanded && (
                         <TableRow key={`${txn.id}-expanded`}>
                           <TableCell colSpan={isAdmin ? 8 : 5} className="bg-muted/50 p-4">
+                            {txn.cancelled && (
+                              <div className="mb-4 p-3 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md">
+                                <div className="flex items-center gap-2">
+                                  <AlertTriangle className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                    This transaction has been cancelled
+                                  </p>
+                                </div>
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 ml-6">
+                                  Only items from this transaction have been released. Previous transactions remain unchanged. This transaction is kept for audit purposes.
+                                </p>
+                              </div>
+                            )}
                             <div className="grid gap-4 md:grid-cols-2">
                               <div>
-                                <h4 className="font-semibold mb-2">Line Items</h4>
-                                {items.map(i => {
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className="font-semibold">Line Items {txn.cancelled && <span className="text-xs font-normal text-muted-foreground">(Cancelled)</span>}</h4>
+                                </div>
+                                {items.length === 0 ? (
+                                  <p className="text-sm text-muted-foreground italic">No items in this transaction</p>
+                                ) : (
+                                  items.map(i => {
                                   const isStall = i.item_type === 'stall';
+                                  const isService = i.item_type === 'service';
                                   return (
-                                    <div key={i.id} className="flex justify-between text-sm p-2 bg-background rounded mb-1">
+                                    <div key={i.id} className={`flex justify-between items-center text-sm p-2 rounded mb-1 group ${txn.cancelled ? 'bg-gray-100 dark:bg-gray-800 opacity-75' : 'bg-background'}`}>
                                       <span className="flex items-center gap-2">
-                                        <Receipt className="h-3 w-3 text-muted-foreground" />
+                                        <Receipt className={`h-3 w-3 ${txn.cancelled ? 'text-gray-400' : 'text-muted-foreground'}`} />
                                         {isStall ? (
                                           <span 
-                                            className="hover:text-primary hover:underline cursor-pointer"
-                                            onClick={() => navigate('/', { state: { stallId: i.stall_id } })}
+                                            className={`${txn.cancelled ? 'text-gray-500 line-through' : 'hover:text-primary hover:underline cursor-pointer'}`}
+                                            onClick={txn.cancelled ? undefined : () => navigate('/', { state: { stallId: i.stall_id } })}
                                           >
                                             {i.item_name}
                                           </span>
                                         ) : (
-                                          i.item_name
+                                          <span className={txn.cancelled ? 'text-gray-500 line-through' : ''}>
+                                            {i.item_name}
+                                          </span>
                                         )}
                                         {i.size && <span className="text-muted-foreground">({i.size})</span>}
+                                        {txn.cancelled && (
+                                          <Badge variant="outline" className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                                            Cancelled
+                                          </Badge>
+                                        )}
                                       </span>
-                                      {isAdmin && <span>₹{i.final_price.toLocaleString()}</span>}
+                                      <div className="flex items-center gap-2">
+                                        {isAdmin && <span className={txn.cancelled ? 'text-gray-500' : ''}>₹{i.final_price.toLocaleString()}</span>}
+                                        {isAdmin && isService && !txn.cancelled && (
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              removeServiceFromTransaction(txn.id, i.id);
+                                              toast({
+                                                title: 'Service Removed',
+                                                description: `${i.item_name} has been removed from this transaction.`,
+                                              });
+                                            }}
+                                          >
+                                            <X className="h-3 w-3 text-destructive" />
+                                          </Button>
+                                        )}
+                                      </div>
                                     </div>
                                   );
-                                })}
+                                  })
+                                )}
                               </div>
                               {isAdmin && (
                                 <div>
@@ -398,9 +615,25 @@ const Transactions = () => {
                                     )}
                                   </div>
                                   {payments.length ? payments.map(p => (
-                                    <div key={p.id} className="flex justify-between text-sm p-2 bg-background rounded mb-1">
+                                    <div key={p.id} className="flex justify-between items-center text-sm p-2 bg-background rounded mb-1 group">
                                       <span>{format(new Date(p.payment_date), 'dd MMM')} - {p.payment_mode.toUpperCase()}</span>
-                                      <span>₹{p.amount.toLocaleString()}</span>
+                                      <div className="flex items-center gap-2">
+                                        <span>₹{p.amount.toLocaleString()}</span>
+                                        {!txn.cancelled && (
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setDeletePaymentId(p.id);
+                                              setDeletePaymentDialogOpen(true);
+                                            }}
+                                          >
+                                            <Trash2 className="h-3 w-3 text-destructive" />
+                                          </Button>
+                                        )}
+                                      </div>
                                     </div>
                                   )) : (
                                     <p className="text-sm text-muted-foreground">No payments recorded</p>
@@ -408,12 +641,64 @@ const Transactions = () => {
                                 </div>
                               )}
                             </div>
+                            {isAdmin && !txn.cancelled && (
+                              <div className="mt-4 pt-4 border-t">
+                                <div className="flex items-center gap-2">
+                                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                                  <span className="text-sm font-medium text-muted-foreground">Correction Options</span>
+                                </div>
+                                <div className="flex gap-2 mt-2">
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCancelTxnId(txn.id);
+                                      setCancelDialogOpen(true);
+                                    }}
+                                  >
+                                    <X className="h-4 w-4 mr-1" />
+                                    Cancel Transaction
+                                  </Button>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  Cancelling will release only the stalls and services from this transaction. Previous transactions remain unchanged. The transaction will remain visible as cancelled for audit purposes.
+                                </p>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       )}
                     </>
                   ); 
                 })}
+                {filteredTxns.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={isAdmin ? 8 : 5} className="h-64 text-center">
+                      <div className="flex flex-col items-center justify-center space-y-3 py-8">
+                        <Receipt className="h-12 w-12 text-muted-foreground/50" />
+                        <div className="space-y-1">
+                          <p className="text-lg font-medium text-muted-foreground">
+                            {search || statusFilter !== 'all' 
+                              ? 'No transactions match your search' 
+                              : 'No transactions found'}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {search || statusFilter !== 'all'
+                              ? 'Try adjusting your search or filter criteria.'
+                              : 'Create your first transaction to get started.'}
+                          </p>
+                        </div>
+                        {(!search && statusFilter === 'all') && isAdmin && (
+                          <Button onClick={() => setCreateDialogOpen(true)} className="mt-2">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Transaction
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -512,7 +797,9 @@ const Transactions = () => {
                   <SelectTrigger className={leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction ? 'opacity-50 cursor-not-allowed' : ''}>
                     <SelectValue placeholder={
                       leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction
-                        ? "This buyer already owns stalls. Add services only."
+                        ? "This buyer already owns stalls. Use 'Add Services' to add services to existing stalls."
+                        : availableStallsForLead.length === 0
+                        ? "No available stalls (all sold/reserved)"
                         : "Select a stall to add..."
                     } />
                   </SelectTrigger>
@@ -532,6 +819,11 @@ const Transactions = () => {
                     )}
                   </SelectContent>
                 </Select>
+                {availableStallsForLead.length === 0 && !leadOwnsStalls && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    All stalls have been sold or reserved. Sold stalls cannot be purchased again.
+                  </p>
+                )}
                 {leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction && (
                   <div className="p-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
                     <p className="text-xs font-medium text-amber-900 dark:text-amber-100">
@@ -562,11 +854,32 @@ const Transactions = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {services && services.length > 0 ? (
-                      services.filter(s => s && (s.is_unlimited || (s.sold_quantity !== undefined && s.quantity !== undefined && s.sold_quantity < s.quantity))).map(service => (
-                        <SelectItem key={service.id} value={service.id} disabled={selectedItems.some(i => i.id === service.id)}>
-                          {service.name} - ₹{(service.price || 0).toLocaleString()}
-                        </SelectItem>
-                      ))
+                      services.map(service => {
+                        const isSoldOut = !service.is_unlimited && service.sold_quantity >= service.quantity;
+                        const isSelected = selectedItems.some(i => i.id === service.id);
+                        const isAvailable = service.is_unlimited || (service.sold_quantity < service.quantity);
+                        
+                        return (
+                          <SelectItem 
+                            key={service.id} 
+                            value={service.id} 
+                            disabled={isSoldOut || isSelected}
+                            className={isSoldOut ? 'opacity-50' : ''}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span>
+                                {service.name} - ₹{(service.price || 0).toLocaleString()}
+                              </span>
+                              {isSoldOut && (
+                                <Badge variant="destructive" className="ml-2 text-xs">Sold Out</Badge>
+                              )}
+                              {isSelected && !isSoldOut && (
+                                <Badge variant="secondary" className="ml-2 text-xs">Added</Badge>
+                              )}
+                            </div>
+                          </SelectItem>
+                        );
+                      })
                     ) : (
                       <SelectItem value="" disabled>No services available</SelectItem>
                     )}
@@ -711,7 +1024,11 @@ const Transactions = () => {
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateTransaction} disabled={!selectedLead || selectedItems.length === 0}>
+            <Button 
+              onClick={handleCreateTransaction} 
+              disabled={!canCreateTransaction}
+              className={!canCreateTransaction ? 'opacity-50 cursor-not-allowed' : ''}
+            >
               Create Transaction
             </Button>
           </div>
@@ -727,20 +1044,53 @@ const Transactions = () => {
           <div className="space-y-4 py-4">
             {paymentTxnId && (() => {
               const txn = transactions.find(t => t.id === paymentTxnId);
-              const pending = txn ? txn.total_amount - txn.amount_paid : 0;
-              return txn ? (
+              if (!txn) return null;
+              
+              if (txn.cancelled) {
+                return (
+                  <div className="p-3 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm">
+                    <div className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                      <AlertTriangle className="h-4 w-4" />
+                      <p className="font-medium">This transaction has been cancelled</p>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 ml-6">
+                      Payments cannot be added to cancelled transactions.
+                    </p>
+                  </div>
+                );
+              }
+              
+              const pending = txn.total_amount - txn.amount_paid;
+              return (
                 <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
                   <p><span className="text-muted-foreground">Transaction:</span> {txn.transaction_number}</p>
                   <p><span className="text-muted-foreground">Total:</span> ₹{txn.total_amount.toLocaleString()}</p>
                   <p><span className="text-muted-foreground">Already Paid:</span> ₹{txn.amount_paid.toLocaleString()}</p>
                   <p className="font-medium text-orange-600">Pending: ₹{pending.toLocaleString()}</p>
                 </div>
-              ) : null;
+              );
             })()}
 
             <div className="space-y-2">
               <Label>Amount *</Label>
-              <Input type="number" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder="Enter amount" />
+              <Input 
+                type="number" 
+                value={paymentAmount} 
+                onChange={(e) => setPaymentAmount(e.target.value)} 
+                placeholder="Enter amount" 
+                min="0"
+                step="0.01"
+              />
+              {paymentTxnId && (() => {
+                const txn = transactions.find(t => t.id === paymentTxnId);
+                if (!txn) return null;
+                const pending = txn.total_amount - txn.amount_paid;
+                return pending > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Maximum: ₹{pending.toLocaleString()}
+                  </p>
+                ) : null;
+              })()}
             </div>
 
             <div className="space-y-2">
@@ -783,6 +1133,84 @@ const Transactions = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Transaction Confirmation */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Transaction</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this transaction? This will:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Release only the stalls purchased in <strong>this transaction</strong> (they will become available again)</li>
+                <li>Remove only the service allocations created as part of <strong>this transaction</strong></li>
+                <li>Keep the transaction visible as "Cancelled" for audit purposes</li>
+              </ul>
+              <p className="mt-2 text-sm text-muted-foreground">
+                <strong>Note:</strong> This will only affect items in this specific transaction. Previous transactions and their items will remain unchanged.
+              </p>
+              <p className="mt-2 font-medium">This action cannot be undone.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Transaction</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (cancelTxnId) {
+                  cancelTransaction(cancelTxnId);
+                  toast({
+                    title: 'Transaction Cancelled',
+                    description: 'This transaction has been cancelled. Only items from this transaction have been released.',
+                  });
+                  setCancelDialogOpen(false);
+                  setCancelTxnId('');
+                  setExpandedRow(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Cancel Transaction
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Payment Confirmation */}
+      <AlertDialog open={deletePaymentDialogOpen} onOpenChange={setDeletePaymentDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Payment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this payment record? This will:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Remove the payment from the transaction</li>
+                <li>Recalculate the transaction payment status automatically</li>
+                <li>Update stall status if needed</li>
+              </ul>
+              <p className="mt-2 font-medium">This action cannot be undone.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Payment</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deletePaymentId) {
+                  deletePayment(deletePaymentId);
+                  toast({
+                    title: 'Payment Deleted',
+                    description: 'The payment has been removed and transaction status has been updated.',
+                  });
+                  setDeletePaymentDialogOpen(false);
+                  setDeletePaymentId('');
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Payment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MockAppLayout>
   );
 };

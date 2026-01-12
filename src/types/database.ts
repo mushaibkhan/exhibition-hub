@@ -95,6 +95,8 @@ export interface Transaction {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  cancelled?: boolean;
+  cancelled_at?: string | null;
   lead?: Lead;
 }
 

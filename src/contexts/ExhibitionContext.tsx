@@ -13,7 +13,7 @@ export interface Exhibition {
 export const EXHIBITIONS: Exhibition[] = [
   {
     id: 'kings-crown-business',
-    name: 'Kings Crown Business Expo',
+    name: 'Business - Kings Crown',
     shortName: 'KC Business',
     description: 'Premier business exhibition showcasing industry leaders',
     startDate: '2024-03-15',
@@ -21,7 +21,7 @@ export const EXHIBITIONS: Exhibition[] = [
   },
   {
     id: 'kings-crown-education',
-    name: 'Kings Crown Education Expo',
+    name: 'Education - Kings Crown',
     shortName: 'KC Education',
     description: 'Educational institutions and career opportunities fair',
     startDate: '2024-04-10',
@@ -29,8 +29,8 @@ export const EXHIBITIONS: Exhibition[] = [
   },
   {
     id: 'charminar-business',
-    name: 'Charminar Business Expo',
-    shortName: 'Charminar',
+    name: 'Education - Old City',
+    shortName: 'Old City Education',
     description: 'Traditional and modern business showcase at Charminar',
     startDate: '2024-05-20',
     endDate: '2024-05-23',

@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Lead, LeadStatus } from '@/types/database';
-import { Plus, Search, Phone, Mail, Building2, Edit, Trash2, Receipt, Download } from 'lucide-react';
+import { Plus, Search, Phone, Mail, Building2, Edit, Trash2, Receipt, Download, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { exportToExcel, formatDateForExport } from '@/lib/exportUtils';
 
@@ -28,6 +28,8 @@ const Leads = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [formData, setFormData] = useState({ name: '', phone: '', email: '', company: '', status: 'new' as LeadStatus, interested_size: '', interested_zone: '', notes: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const filteredLeads = leads.filter(lead => {
     const matchesSearch = lead.name.toLowerCase().includes(search.toLowerCase()) || lead.company?.toLowerCase().includes(search.toLowerCase()) || lead.phone.includes(search);
@@ -38,34 +40,114 @@ const Leads = () => {
 
   const resetForm = () => { setFormData({ name: '', phone: '', email: '', company: '', status: 'new', interested_size: '', interested_zone: '', notes: '' }); setEditingLead(null); };
 
+  const validatePhone = (phone: string): boolean => {
+    // Remove spaces, dashes, and parentheses
+    const cleaned = phone.replace(/[\s\-\(\)]/g, '');
+    // Check if it's 10 digits or 10 digits with country code
+    return /^(\+91)?[6-9]\d{9}$/.test(cleaned) || /^\d{10}$/.test(cleaned);
+  };
+
+  const validateEmail = (email: string): boolean => {
+    if (!email) return true; // Email is optional
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
   const handleSubmit = () => {
-    if (!formData.name || !formData.phone) { toast({ title: 'Error', description: 'Name and phone required', variant: 'destructive' }); return; }
-    if (editingLead) { updateLead(editingLead.id, formData); toast({ title: 'Success', description: 'Lead updated' }); }
-    else { addLead({ ...formData, created_by: null }); toast({ title: 'Success', description: 'Lead added' }); }
-    setDialogOpen(false); resetForm();
+    if (isSubmitting) return;
+    
+    // Validate required fields
+    if (!formData.name?.trim()) {
+      toast({ 
+        title: 'Validation Error', 
+        description: 'Name is required. Please enter the lead\'s full name.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    if (!formData.phone?.trim()) {
+      toast({ 
+        title: 'Validation Error', 
+        description: 'Phone number is required. Please enter a valid phone number.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    // Validate phone format
+    if (!validatePhone(formData.phone)) {
+      toast({ 
+        title: 'Invalid Phone Number', 
+        description: 'Please enter a valid 10-digit phone number (e.g., 9876543210 or +91 9876543210).', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    // Validate email format if provided
+    if (formData.email && !validateEmail(formData.email)) {
+      toast({ 
+        title: 'Invalid Email Address', 
+        description: 'Please enter a valid email address (e.g., example@email.com).', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    // Validate name length
+    if (formData.name.length > 100) {
+      toast({ 
+        title: 'Validation Error', 
+        description: 'Name is too long. Please enter a name with less than 100 characters.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (editingLead) { 
+        updateLead(editingLead.id, formData); 
+        toast({ title: 'Success', description: `Lead "${formData.name}" updated successfully` }); 
+      } else { 
+        addLead({ ...formData, created_by: null }); 
+        toast({ title: 'Success', description: `Lead "${formData.name}" added successfully` }); 
+      }
+      setDialogOpen(false); 
+      resetForm();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleEdit = (lead: Lead) => { setEditingLead(lead); setFormData({ name: lead.name, phone: lead.phone, email: lead.email || '', company: lead.company || '', status: lead.status, interested_size: lead.interested_size || '', interested_zone: lead.interested_zone || '', notes: lead.notes || '' }); setDialogOpen(true); };
 
-  const handleExport = () => {
-    const exportData = filteredLeads.map(lead => {
-      const txn = getLeadTransaction(lead.id);
-      return {
-        'Name': lead.name,
-        'Phone': lead.phone,
-        'Email': lead.email || '',
-        'Company': lead.company || '',
-        'Status': statusLabels[lead.status],
-        'Preferred Size': lead.interested_size || '',
-        'Preferred Floor': lead.interested_zone || '',
-        'Transaction Number': txn?.transaction_number || '',
-        'Notes': lead.notes || '',
-        'Created Date': formatDateForExport(lead.created_at),
-      };
-    });
+  const handleExport = async () => {
+    if (isExporting || filteredLeads.length === 0) return;
+    setIsExporting(true);
+    
+    try {
+      const exportData = filteredLeads.map(lead => {
+        const txn = getLeadTransaction(lead.id);
+        return {
+          'Name': lead.name,
+          'Phone': lead.phone,
+          'Email': lead.email || '',
+          'Company': lead.company || '',
+          'Status': statusLabels[lead.status],
+          'Preferred Size': lead.interested_size || '',
+          'Preferred Floor': lead.interested_zone || '',
+          'Transaction Number': txn?.transaction_number || '',
+          'Notes': lead.notes || '',
+          'Created Date': formatDateForExport(lead.created_at),
+        };
+      });
 
-    exportToExcel(exportData, 'Leads_Export', 'Leads');
-    toast({ title: 'Success', description: `Exported ${exportData.length} lead(s) to Excel` });
+      exportToExcel(exportData, 'Leads_Export', 'Leads');
+      toast({ title: 'Success', description: `Exported ${exportData.length} lead(s) to Excel` });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -80,8 +162,18 @@ const Leads = () => {
         <div className="flex gap-4 flex-wrap">
           <div className="relative flex-1 max-w-sm"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" /></div>
           <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="follow_up">Follow Up</SelectItem><SelectItem value="interested">Interested</SelectItem><SelectItem value="converted">Converted</SelectItem></SelectContent></Select>
-          <Button variant="outline" onClick={handleExport} disabled={filteredLeads.length === 0}>
-            <Download className="mr-2 h-4 w-4" />Export to Excel
+          <Button variant="outline" onClick={handleExport} disabled={filteredLeads.length === 0 || isExporting}>
+            {isExporting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="mr-2 h-4 w-4" />
+                Export to Excel
+              </>
+            )}
           </Button>
           <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
             <DialogTrigger asChild>
@@ -206,7 +298,33 @@ const Leads = () => {
           </Dialog>
         </div>
         <Card><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Company</TableHead><TableHead>Status</TableHead><TableHead>Transaction</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
-          {filteredLeads.map((lead) => {
+          {filteredLeads.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={6} className="h-64 text-center">
+                <div className="flex flex-col items-center justify-center space-y-3 py-8">
+                  <Users className="h-12 w-12 text-muted-foreground/50" />
+                  <div className="space-y-1">
+                    <p className="text-lg font-medium text-muted-foreground">
+                      {search || statusFilter !== 'all'
+                        ? 'No leads match your search'
+                        : 'No leads found'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {search || statusFilter !== 'all'
+                        ? 'Try adjusting your search or filter criteria.'
+                        : 'Add your first lead to get started.'}
+                    </p>
+                  </div>
+                  {(!search && statusFilter === 'all') && (
+                    <Button onClick={() => setDialogOpen(true)} className="mt-2">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Lead
+                    </Button>
+                  )}
+                </div>
+              </TableCell>
+            </TableRow>
+          ) : filteredLeads.map((lead) => {
             const txn = getLeadTransaction(lead.id);
             return (
               <TableRow key={lead.id}>

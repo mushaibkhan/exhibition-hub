@@ -302,8 +302,22 @@ const Services = () => {
                 })}
                 {filteredServices.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No services found
+                    <TableCell colSpan={6} className="h-64 text-center">
+                      <div className="flex flex-col items-center justify-center space-y-3 py-8">
+                        <Package className="h-12 w-12 text-muted-foreground/50" />
+                        <div className="space-y-1">
+                          <p className="text-lg font-medium text-muted-foreground">
+                            {search || categoryFilter !== 'all'
+                              ? 'No services match your search'
+                              : 'No services found'}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {search || categoryFilter !== 'all'
+                              ? 'Try adjusting your search or filter criteria.'
+                              : 'Services will appear here once they are configured.'}
+                          </p>
+                        </div>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}

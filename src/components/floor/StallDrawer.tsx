@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 import { format } from 'date-fns';
@@ -48,13 +47,11 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
   const isMaintainer = role === 'maintainer';
   const { toast } = useToast();
   const [notes, setNotes] = useState(stall?.notes || '');
-  const [status, setStatus] = useState(stall?.status || 'available');
 
   // Reset form when stall changes
   useEffect(() => {
     if (stall) {
       setNotes(stall.notes || '');
-      setStatus(stall.status);
     }
   }, [stall]);
 
@@ -82,16 +79,7 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
   const handleSave = () => {
     const updates: Partial<Stall> = { notes };
     
-    // Maintainers can only change to reserved
-    if (isMaintainer && status === 'reserved' && stall.status === 'available') {
-      updates.status = 'reserved';
-    }
-    
-    // Admins can change any status
-    if (isAdmin) {
-      updates.status = status as Stall['status'];
-    }
-
+    // Status is derived from transactions/payments, not manually editable
     updateStallFn(stall.id, updates);
     toast({
       title: 'Success',
@@ -103,8 +91,8 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[400px] sm:w-[540px]">
-        <SheetHeader>
+      <SheetContent className="w-[400px] sm:w-[540px] flex flex-col max-h-screen h-screen">
+        <SheetHeader className="flex-shrink-0">
           <SheetTitle className="flex items-center gap-3">
             <span>Stall {stall.stall_number}</span>
             <Badge variant="outline" className={statusColors[stall.status]}>
@@ -113,7 +101,7 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
           </SheetTitle>
         </SheetHeader>
 
-        <div className="mt-6 space-y-6">
+        <div className="mt-6 space-y-6 flex-1 overflow-y-auto pr-2">
           {/* Stall Details */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Details</h3>
@@ -302,35 +290,13 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
             </>
           )}
 
-          {/* Status Change */}
+          {/* Status Display (Read-only) */}
           <div className="space-y-3">
             <Label>Status</Label>
-            {isAdmin ? (
-              <Select value={status} onValueChange={(v) => setStatus(v as Stall['status'])}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="available">Available</SelectItem>
-                  <SelectItem value="reserved">Reserved</SelectItem>
-                  <SelectItem value="sold">Sold</SelectItem>
-                  <SelectItem value="pending">Payment Pending</SelectItem>
-                  <SelectItem value="blocked">Blocked</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : isMaintainer && stall.status === 'available' ? (
-              <Select value={status} onValueChange={(v) => setStatus(v as Stall['status'])}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="available">Available</SelectItem>
-                  <SelectItem value="reserved">Reserved</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : (
-              <p className="text-sm text-muted-foreground">{statusLabels[stall.status]}</p>
-            )}
+            <p className="text-sm text-muted-foreground">{statusLabels[stall.status]}</p>
+            <p className="text-xs text-muted-foreground italic">
+              Status is automatically derived from transactions and payments.
+            </p>
           </div>
 
           {/* Notes */}

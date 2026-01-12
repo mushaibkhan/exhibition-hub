@@ -167,6 +167,27 @@ const Stalls = () => {
                     </TableRow>
                   );
                 })}
+                {filteredStalls.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={isAdmin ? 8 : 7} className="h-64 text-center">
+                      <div className="flex flex-col items-center justify-center space-y-3 py-8">
+                        <Square className="h-12 w-12 text-muted-foreground/50" />
+                        <div className="space-y-1">
+                          <p className="text-lg font-medium text-muted-foreground">
+                            {search || statusFilter !== 'all'
+                              ? 'No stalls match your criteria'
+                              : 'No stalls found'}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {search || statusFilter !== 'all'
+                              ? 'Try adjusting your search or filter criteria.'
+                              : 'Stalls will appear here once they are configured.'}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>

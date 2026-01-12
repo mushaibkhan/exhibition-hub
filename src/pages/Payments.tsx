@@ -1,11 +1,12 @@
 import { Navigate, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
 import { useMockData } from '@/contexts/MockDataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PaymentMode } from '@/types/database';
-import { CreditCard, Banknote, Smartphone, Download } from 'lucide-react';
+import { CreditCard, Banknote, Smartphone, Download, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -18,38 +19,56 @@ const Payments = () => {
   const { isAdmin, payments, transactions, accounts, getLeadById } = useMockData();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [isExporting, setIsExporting] = useState(false);
   if (!isAdmin) return <Navigate to="/" replace />;
 
   const stats = { total: payments.length, totalAmount: payments.reduce((s, p) => s + p.amount, 0), cash: payments.filter(p => p.payment_mode === 'cash').reduce((s, p) => s + p.amount, 0), upi: payments.filter(p => p.payment_mode === 'upi').reduce((s, p) => s + p.amount, 0), bank: payments.filter(p => p.payment_mode === 'bank').reduce((s, p) => s + p.amount, 0) };
 
-  const handleExport = () => {
-    const exportData = payments.map(p => {
-      const txn = transactions.find(t => t.id === p.transaction_id);
-      const lead = txn ? getLeadById(txn.lead_id) : null;
-      const account = accounts.find(a => a.id === p.account_id);
-      
-      return {
-        'Payment Date': formatDateForExport(p.payment_date),
-        'Transaction Number': txn?.transaction_number || '',
-        'Buyer Name': lead?.name || '',
-        'Amount': formatCurrencyForExport(p.amount),
-        'Payment Mode': p.payment_mode.toUpperCase(),
-        'Reference ID': p.reference_id || '',
-        'Account': account?.name || '',
-        'Notes': p.notes || '',
-      };
-    });
+  const handleExport = async () => {
+    if (isExporting || payments.length === 0) return;
+    setIsExporting(true);
+    
+    try {
+      const exportData = payments.map(p => {
+        const txn = transactions.find(t => t.id === p.transaction_id);
+        const lead = txn ? getLeadById(txn.lead_id) : null;
+        const account = accounts.find(a => a.id === p.account_id);
+        
+        return {
+          'Payment Date': formatDateForExport(p.payment_date),
+          'Transaction Number': txn?.transaction_number || '',
+          'Buyer Name': lead?.name || '',
+          'Amount': formatCurrencyForExport(p.amount),
+          'Payment Mode': p.payment_mode.toUpperCase(),
+          'Reference ID': p.reference_id || '',
+          'Account': account?.name || '',
+          'Notes': p.notes || '',
+        };
+      });
 
-    exportToExcel(exportData, 'Payments_Export', 'Payments');
-    toast({ title: 'Success', description: `Exported ${exportData.length} payment(s) to Excel` });
+      exportToExcel(exportData, 'Payments_Export', 'Payments');
+      toast({ title: 'Success', description: `Exported ${exportData.length} payment(s) to Excel` });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
     <MockAppLayout title="Payments" subtitle="Payment records (Admin Only)">
       <div className="space-y-6">
         <div className="flex justify-end">
-          <Button variant="outline" onClick={handleExport} disabled={payments.length === 0}>
-            <Download className="mr-2 h-4 w-4" />Export to Excel
+          <Button variant="outline" onClick={handleExport} disabled={payments.length === 0 || isExporting}>
+            {isExporting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="mr-2 h-4 w-4" />
+                Export to Excel
+              </>
+            )}
           </Button>
         </div>
         <div className="grid gap-4 md:grid-cols-4">
@@ -84,6 +103,21 @@ const Payments = () => {
               </TableRow>
             ); 
           })}
+          {payments.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={6} className="h-64 text-center">
+                <div className="flex flex-col items-center justify-center space-y-3 py-8">
+                  <CreditCard className="h-12 w-12 text-muted-foreground/50" />
+                  <div className="space-y-1">
+                    <p className="text-lg font-medium text-muted-foreground">No payments recorded yet</p>
+                    <p className="text-sm text-muted-foreground">
+                      Payments will appear here once transactions are created and payments are recorded.
+                    </p>
+                  </div>
+                </div>
+              </TableCell>
+            </TableRow>
+          )}
         </TableBody></Table></CardContent></Card>
       </div>
     </MockAppLayout>

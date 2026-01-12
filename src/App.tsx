@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ExhibitionProvider } from "@/contexts/ExhibitionContext";
 import { MockDataProvider } from "@/contexts/MockDataContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
@@ -19,30 +20,34 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ExhibitionProvider>
-      <MockDataProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/leads" element={<Leads />} />
-              <Route path="/stalls" element={<Stalls />} />
-              <Route path="/services" element={<Services />} />
-              <Route path="/transactions" element={<Transactions />} />
-              <Route path="/payments" element={<Payments />} />
-              <Route path="/accounts" element={<Accounts />} />
-              <Route path="/users" element={<Users />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </MockDataProvider>
-    </ExhibitionProvider>
-  </QueryClientProvider>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <ExhibitionProvider>
+        <MockDataProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <ErrorBoundary>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/leads" element={<Leads />} />
+                  <Route path="/stalls" element={<Stalls />} />
+                  <Route path="/services" element={<Services />} />
+                  <Route path="/transactions" element={<Transactions />} />
+                  <Route path="/payments" element={<Payments />} />
+                  <Route path="/accounts" element={<Accounts />} />
+                  <Route path="/users" element={<Users />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </ErrorBoundary>
+            </BrowserRouter>
+          </TooltipProvider>
+        </MockDataProvider>
+      </ExhibitionProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

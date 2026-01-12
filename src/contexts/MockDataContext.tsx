@@ -28,6 +28,9 @@ interface MockDataContextType {
   removeServiceAllocation: (id: string) => void;
   addTransaction: (transaction: Omit<Transaction, 'id' | 'transaction_number' | 'created_at' | 'updated_at'>, items: Omit<TransactionItem, 'id' | 'transaction_id' | 'created_at'>[], selectedStallId?: string) => void;
   updateTransaction: (id: string, updates: Partial<Transaction>) => void;
+  cancelTransaction: (id: string) => void;
+  removeServiceFromTransaction: (transactionId: string, itemId: string) => void;
+  deletePayment: (paymentId: string) => void;
   addPayment: (payment: Omit<Payment, 'id' | 'created_at'>) => void;
   addAccount: (account: Omit<Account, 'id' | 'created_at' | 'updated_at'>) => void;
   updateAccount: (id: string, updates: Partial<Account>) => void;
@@ -83,6 +86,9 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [currentExhibitionId]);
 
   // Get the current exhibition's dataset - this is the key to isolation
+  // When allDatasets changes (via updateCurrentDataset), this memo recalculates,
+  // causing the destructured arrays (transactions, transactionItems, payments, etc.) to update,
+  // which triggers dependent useEffects and re-renders throughout the app
   const currentDataset = useMemo(() => {
     const dataset = allDatasets[currentExhibitionId];
     if (!dataset) {
@@ -110,11 +116,17 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [currentExhibitionId]);
 
   // Derive stall statuses from transaction payment status - scoped to current exhibition
+  // Reactive chain: allDatasets change → currentDataset memo recalculates → transactions/transactionItems/payments change → useEffect runs → stall statuses update
   useEffect(() => {
     updateCurrentDataset(dataset => {
       let hasChanges = false;
       const newStalls = dataset.stalls.map(stall => {
-        const txnItem = dataset.transactionItems.find(ti => ti.stall_id === stall.id);
+        // Find transaction items for this stall, excluding cancelled transactions
+        const txnItem = dataset.transactionItems.find(ti => {
+          if (ti.stall_id !== stall.id) return false;
+          const txn = dataset.transactions.find(t => t.id === ti.transaction_id);
+          return txn && !txn.cancelled;
+        });
         if (!txnItem) {
           if (stall.status !== 'blocked' && stall.status !== 'available') {
             hasChanges = true;
@@ -124,7 +136,7 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
 
         const txn = dataset.transactions.find(t => t.id === txnItem.transaction_id);
-        if (!txn) return stall;
+        if (!txn || txn.cancelled) return stall;
 
         let newStatus: StallStatus;
         switch (txn.payment_status) {
@@ -152,7 +164,7 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       return dataset;
     });
-  }, [currentExhibitionId, updateCurrentDataset]);
+  }, [currentExhibitionId, transactions, transactionItems, payments, updateCurrentDataset]);
 
   const updateStall = useCallback((id: string, updates: Partial<Stall>) => {
     updateCurrentDataset(dataset => ({
@@ -250,6 +262,31 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const txnId = `${currentExhibitionId}_txn_${Date.now()}`;
     
     updateCurrentDataset(dataset => {
+      // Defensive validation: Verify all stall IDs belong to current exhibition
+      const stallIdsInItems = items
+        .filter(item => item.item_type === 'stall' && item.stall_id)
+        .map(item => item.stall_id!);
+      
+      const invalidStalls = stallIdsInItems.filter(stallId => 
+        !dataset.stalls.some(s => s.id === stallId)
+      );
+      
+      // Filter out invalid items to prevent data corruption
+      let validItems = items;
+      if (invalidStalls.length > 0) {
+        console.error(`[MockData] Invalid stall IDs for exhibition ${currentExhibitionId}:`, invalidStalls);
+        validItems = items.filter(item => 
+          item.item_type !== 'stall' || !item.stall_id || !invalidStalls.includes(item.stall_id)
+        );
+      }
+      
+      // Validate selectedStallId if provided (for service-only transactions)
+      if (selectedStallId && !dataset.stalls.some(s => s.id === selectedStallId)) {
+        console.error(`[MockData] Invalid selectedStallId for exhibition ${currentExhibitionId}:`, selectedStallId);
+        // Don't proceed with invalid stall selection
+        return dataset;
+      }
+      
       const txnNumber = `TXN-${currentExhibitionId.toUpperCase().substring(0, 4)}-${String(dataset.transactions.length + 1).padStart(4, '0')}`;
       const newTransaction: Transaction = { 
         ...transaction, 
@@ -258,7 +295,7 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         created_at: new Date().toISOString(), 
         updated_at: new Date().toISOString() 
       };
-      const newItems: TransactionItem[] = items.map((item, idx) => ({ 
+      const newItems: TransactionItem[] = validItems.map((item, idx) => ({ 
         ...item, 
         id: `${currentExhibitionId}_item_${Date.now()}_${idx}`, 
         transaction_id: txnId, 
@@ -325,7 +362,147 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }));
   }, [updateCurrentDataset]);
 
+  const cancelTransaction = useCallback((id: string) => {
+    updateCurrentDataset(dataset => {
+      const transaction = dataset.transactions.find(t => t.id === id);
+      if (!transaction || transaction.cancelled) return dataset;
+
+      // Mark transaction as cancelled
+      const cancelledAt = new Date().toISOString();
+      const updatedTransactions = dataset.transactions.map(t => 
+        t.id === id ? { ...t, cancelled: true, cancelled_at: cancelledAt, updated_at: cancelledAt } : t
+      );
+
+      // Keep transaction items for audit purposes (they show what was cancelled)
+      // We don't remove them - they remain visible to show what was in the cancelled transaction
+      const updatedTransactionItems = dataset.transactionItems;
+
+      // Remove ONLY service allocations that were created as part of THIS transaction
+      // Service allocations have IDs in format: `${currentExhibitionId}_alloc_${txnId}_${idx}`
+      // So we can identify them by checking if the allocation ID contains this transaction ID
+      const updatedServiceAllocations = dataset.serviceAllocations.filter(alloc => {
+        // Check if allocation ID contains this transaction ID (format: ..._alloc_${txnId}_...)
+        return !alloc.id.includes(`_alloc_${id}_`);
+      });
+
+      // Update service sold_quantity (decrease by removed allocations)
+      const removedAllocations = dataset.serviceAllocations.filter(alloc => 
+        !updatedServiceAllocations.some(a => a.id === alloc.id)
+      );
+      const updatedServices = dataset.services.map(service => {
+        const removedCount = removedAllocations.filter(a => a.service_id === service.id).length;
+        return removedCount > 0 
+          ? { ...service, sold_quantity: Math.max(0, service.sold_quantity - removedCount) }
+          : service;
+      });
+
+      return {
+        ...dataset,
+        transactions: updatedTransactions,
+        transactionItems: updatedTransactionItems,
+        serviceAllocations: updatedServiceAllocations,
+        services: updatedServices,
+      };
+    });
+  }, [updateCurrentDataset]);
+
+  const removeServiceFromTransaction = useCallback((transactionId: string, itemId: string) => {
+    updateCurrentDataset(dataset => {
+      const item = dataset.transactionItems.find(i => i.id === itemId);
+      if (!item || item.item_type !== 'service' || item.transaction_id !== transactionId) {
+        return dataset;
+      }
+
+      const transaction = dataset.transactions.find(t => t.id === transactionId);
+      if (!transaction || transaction.cancelled) return dataset;
+
+      // Remove the service item
+      const updatedTransactionItems = dataset.transactionItems.filter(i => i.id !== itemId);
+      
+      // Recalculate transaction total
+      const newTotal = updatedTransactionItems.reduce((sum, i) => sum + i.final_price, 0);
+      
+      // Remove service allocation if it exists
+      const updatedServiceAllocations = dataset.serviceAllocations.filter(alloc => {
+        if (alloc.service_id !== item.service_id) return true;
+        // Match by stall and creation time proximity
+        const allocDate = new Date(alloc.created_at).getTime();
+        const txnDate = new Date(transaction.created_at).getTime();
+        return Math.abs(allocDate - txnDate) > 10000;
+      });
+
+      // Update service sold_quantity
+      const removedAllocations = dataset.serviceAllocations.filter(alloc => 
+        !updatedServiceAllocations.some(a => a.id === alloc.id)
+      );
+      const updatedServices = dataset.services.map(service => {
+        const removedCount = removedAllocations.filter(a => a.service_id === service.id).length;
+        return removedCount > 0 
+          ? { ...service, sold_quantity: Math.max(0, service.sold_quantity - removedCount) }
+          : service;
+      });
+
+      // Update transaction total and payment status
+      const updatedTransactions = dataset.transactions.map(t => {
+        if (t.id !== transactionId) return t;
+        const newAmountPaid = Math.min(t.amount_paid, newTotal);
+        const newPaymentStatus: PaymentStatus = newAmountPaid >= newTotal ? 'paid' : newAmountPaid > 0 ? 'partial' : 'unpaid';
+        return {
+          ...t,
+          total_amount: newTotal,
+          amount_paid: newAmountPaid,
+          payment_status: newPaymentStatus,
+          updated_at: new Date().toISOString(),
+        };
+      });
+
+      return {
+        ...dataset,
+        transactions: updatedTransactions,
+        transactionItems: updatedTransactionItems,
+        serviceAllocations: updatedServiceAllocations,
+        services: updatedServices,
+      };
+    });
+  }, [updateCurrentDataset]);
+
+  const deletePayment = useCallback((paymentId: string) => {
+    updateCurrentDataset(dataset => {
+      const payment = dataset.payments.find(p => p.id === paymentId);
+      if (!payment) return dataset;
+
+      const transaction = dataset.transactions.find(t => t.id === payment.transaction_id);
+      if (!transaction || transaction.cancelled) return dataset;
+
+      // Remove payment
+      const updatedPayments = dataset.payments.filter(p => p.id !== paymentId);
+
+      // Recalculate transaction payment status
+      const remainingPayments = updatedPayments.filter(p => p.transaction_id === payment.transaction_id);
+      const totalPaid = remainingPayments.reduce((sum, p) => sum + p.amount, 0);
+      const newStatus: PaymentStatus = totalPaid >= transaction.total_amount ? 'paid' : totalPaid > 0 ? 'partial' : 'unpaid';
+
+      const updatedTransactions = dataset.transactions.map(t => 
+        t.id === payment.transaction_id 
+          ? { ...t, amount_paid: totalPaid, payment_status: newStatus, updated_at: new Date().toISOString() }
+          : t
+      );
+
+      return {
+        ...dataset,
+        payments: updatedPayments,
+        transactions: updatedTransactions,
+      };
+    });
+  }, [updateCurrentDataset]);
+
   const addPayment = useCallback((payment: Omit<Payment, 'id' | 'created_at'>) => {
+    // Defensive validation: ensure amount is positive
+    if (!payment.amount || payment.amount <= 0) {
+      console.error('[MockData] Invalid payment amount:', payment.amount);
+      return;
+    }
+
     const newPayment: Payment = { 
       ...payment, 
       id: `${currentExhibitionId}_pay_${Date.now()}`, 
@@ -335,16 +512,31 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     updateCurrentDataset(dataset => {
       const transaction = dataset.transactions.find(t => t.id === payment.transaction_id);
       if (!transaction) {
+        console.warn('[MockData] Transaction not found for payment:', payment.transaction_id);
         return { ...dataset, payments: [...dataset.payments, newPayment] };
+      }
+
+      // Defensive: prevent payments to cancelled transactions
+      if (transaction.cancelled) {
+        console.warn('[MockData] Attempted to add payment to cancelled transaction:', payment.transaction_id);
+        return dataset;
       }
       
       const currentPayments = dataset.payments.filter(p => p.transaction_id === payment.transaction_id);
-      const totalPaid = currentPayments.reduce((sum, p) => sum + p.amount, 0) + payment.amount;
+      const pendingAmount = transaction.total_amount - transaction.amount_paid;
+      
+      // Defensive: cap payment at pending amount to prevent overpayment
+      const actualPaymentAmount = Math.min(payment.amount, pendingAmount);
+      
+      const totalPaid = currentPayments.reduce((sum, p) => sum + p.amount, 0) + actualPaymentAmount;
       const newStatus: PaymentStatus = totalPaid >= transaction.total_amount ? 'paid' : totalPaid > 0 ? 'partial' : 'unpaid';
+      
+      // Use actual payment amount (may be capped)
+      const finalPayment: Payment = { ...newPayment, amount: actualPaymentAmount };
       
       return {
         ...dataset,
-        payments: [...dataset.payments, newPayment],
+        payments: [...dataset.payments, finalPayment],
         transactions: dataset.transactions.map(t => 
           t.id === payment.transaction_id ? { ...t, amount_paid: totalPaid, payment_status: newStatus, updated_at: new Date().toISOString() } : t
         ),
@@ -398,10 +590,40 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const getItemsByTransactionId = useCallback((txnId: string) => transactionItems.filter(i => i.transaction_id === txnId), [transactionItems]);
   const getServiceAllocationsByStallId = useCallback((stallId: string) => sortedServiceAllocations.filter(a => a.stall_id === stallId), [sortedServiceAllocations]);
   const getServiceById = useCallback((id: string) => services.find(s => s.id === id), [services]);
-  const getAvailableStalls = useCallback(() => stalls.filter(s => s.status === 'available'), [stalls]);
+  /**
+   * Business Rule: A stall can be sold ONLY ONCE per exhibition.
+   * 
+   * A stall is available for purchase if and only if:
+   * - It has NO transaction items (never been in a transaction)
+   * - It is not blocked
+   * 
+   * Status-based filtering is NOT used because:
+   * - Status is derived and can be stale
+   * - A stall with status 'available' might already have a transaction
+   * 
+   * This ensures data integrity and prevents double-selling.
+   */
+  const getAvailableStalls = useCallback(() => {
+    // A stall is available ONLY if it has no transaction items from non-cancelled transactions
+    // This ensures a stall can never be sold twice
+    const stallsWithTransactions = new Set(
+      transactionItems
+        .filter(item => {
+          if (item.item_type !== 'stall' || !item.stall_id) return false;
+          const txn = transactions.find(t => t.id === item.transaction_id);
+          return txn && !txn.cancelled;
+        })
+        .map(item => item.stall_id!)
+    );
+    
+    return stalls.filter(s => 
+      !stallsWithTransactions.has(s.id) && s.status !== 'blocked'
+    );
+  }, [stalls, transactionItems, transactions]);
   
   const getStallsByLeadId = useCallback((leadId: string) => {
-    const leadTransactions = sortedTransactions.filter(t => t.lead_id === leadId);
+    // Only count stalls from non-cancelled transactions
+    const leadTransactions = sortedTransactions.filter(t => t.lead_id === leadId && !t.cancelled);
     const stallItemIds = new Set<string>();
     leadTransactions.forEach(txn => {
       const items = transactionItems.filter(i => i.transaction_id === txn.id && i.item_type === 'stall' && i.stall_id);
@@ -454,7 +676,10 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addServiceAllocation, 
     removeServiceAllocation, 
     addTransaction, 
-    updateTransaction, 
+    updateTransaction,
+    cancelTransaction,
+    removeServiceFromTransaction,
+    deletePayment,
     addPayment, 
     addAccount, 
     updateAccount,
@@ -475,7 +700,7 @@ export const MockDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }), [
     role, isAdmin, stalls, sortedLeads, services, sortedTransactions, transactionItems, sortedPayments, accounts, sortedServiceAllocations,
     updateStall, addLead, updateLead, deleteLead, addService, updateService, deleteService,
-    addServiceAllocation, removeServiceAllocation, addTransaction, updateTransaction, addPayment, addAccount, updateAccount,
+    addServiceAllocation, removeServiceAllocation, addTransaction, updateTransaction, cancelTransaction, removeServiceFromTransaction, deletePayment, addPayment, addAccount, updateAccount,
     getLeadById, getStallById, getStallByNumber, getTransactionById, getTransactionsByLeadId, getPaymentsByTransactionId,
     getItemsByTransactionId, getServiceAllocationsByStallId, getServiceAllocationsByTransactionId, getServiceById, getAvailableStalls, getStallsByLeadId, getTransactionsByStallId,
     currentExhibitionId,
