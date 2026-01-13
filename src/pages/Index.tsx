@@ -60,21 +60,32 @@ const Index = () => {
   };
 
   const renderFloorGrid = (floorStalls: Stall[], cols: number, rows: number) => (
-    <div className="grid gap-1 p-4 bg-muted/30 rounded-lg overflow-auto" style={{ gridTemplateColumns: `repeat(${cols}, minmax(50px, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(50px, auto))` }}>
-      {floorStalls.map((stall) => {
-        const info = getStallInfo(stall);
-        return <StallBox 
-          key={stall.id} 
-          stall={stall} 
-          assignedTo={info.assignedTo} 
-          amountPaid={info.amountPaid} 
-          totalAmount={info.totalAmount}
-          hasServices={info.hasServices}
-          hasPendingPayment={info.hasPendingPayment}
-          serviceCount={info.serviceCount}
-          onClick={() => handleStallClick(stall)} 
-        />;
-      })}
+    <div 
+      className="floor-layout-container overflow-auto max-h-[60vh] md:max-h-none"
+      style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
+    >
+      <div 
+        className="grid gap-1 p-2 md:p-4 bg-muted/30 rounded-lg min-w-[500px]" 
+        style={{ 
+          gridTemplateColumns: `repeat(${cols}, minmax(40px, 1fr))`, 
+          gridTemplateRows: `repeat(${rows}, minmax(40px, auto))` 
+        }}
+      >
+        {floorStalls.map((stall) => {
+          const info = getStallInfo(stall);
+          return <StallBox 
+            key={stall.id} 
+            stall={stall} 
+            assignedTo={info.assignedTo} 
+            amountPaid={info.amountPaid} 
+            totalAmount={info.totalAmount}
+            hasServices={info.hasServices}
+            hasPendingPayment={info.hasPendingPayment}
+            serviceCount={info.serviceCount}
+            onClick={() => handleStallClick(stall)} 
+          />;
+        })}
+      </div>
     </div>
   );
 
@@ -83,9 +94,9 @@ const Index = () => {
       <div className="space-y-6">
         <FloorLegend />
         <Tabs defaultValue="floor1" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="floor1">Floor 1 (Ground)</TabsTrigger>
-            <TabsTrigger value="floor2">Floor 2 (First)</TabsTrigger>
+          <TabsList className="grid w-full max-w-md grid-cols-2 h-10">
+            <TabsTrigger value="floor1" className="text-xs md:text-sm">Floor 1 (Ground)</TabsTrigger>
+            <TabsTrigger value="floor2" className="text-xs md:text-sm">Floor 2 (First)</TabsTrigger>
           </TabsList>
           <TabsContent value="floor1" className="mt-4">
             <div className="rounded-xl border bg-card p-6 shadow-sm">

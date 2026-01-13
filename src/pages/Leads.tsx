@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Lead, LeadStatus } from '@/types/database';
-import { Plus, Search, Phone, Mail, Building2, Edit, Trash2, Receipt, Download, Loader2 } from 'lucide-react';
+import { Plus, Search, Phone, Mail, Building2, Edit, Trash2, Receipt, Download, Loader2, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { exportToExcel, formatDateForExport } from '@/lib/exportUtils';
 
@@ -153,13 +153,13 @@ const Leads = () => {
   return (
     <MockAppLayout title="Leads" subtitle="Manage enquiries and prospects">
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{leads.length}</div></CardContent></Card>
           <Card><CardHeader className="pb-2"><CardTitle className="text-sm">New</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-blue-600">{leads.filter(l => l.status === 'new').length}</div></CardContent></Card>
           <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Follow Up</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-purple-600">{leads.filter(l => l.status === 'follow_up').length}</div></CardContent></Card>
           <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Converted</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-green-600">{leads.filter(l => l.status === 'converted').length}</div></CardContent></Card>
         </div>
-        <div className="flex gap-4 flex-wrap">
+        <div className="flex gap-2 md:gap-4 flex-wrap">
           <div className="relative flex-1 max-w-sm"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" /></div>
           <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="follow_up">Follow Up</SelectItem><SelectItem value="interested">Interested</SelectItem><SelectItem value="converted">Converted</SelectItem></SelectContent></Select>
           <Button variant="outline" onClick={handleExport} disabled={filteredLeads.length === 0 || isExporting}>
@@ -179,7 +179,7 @@ const Leads = () => {
             <DialogTrigger asChild>
               <Button><Plus className="mr-2 h-4 w-4" />Add Lead</Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="w-[95vw] max-w-[600px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingLead ? 'Edit' : 'Add'} Lead</DialogTitle>
               </DialogHeader>

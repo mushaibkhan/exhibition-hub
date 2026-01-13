@@ -38,7 +38,7 @@ const Dashboard = () => {
     <MockAppLayout title="Dashboard" subtitle="Overview and analytics (Admin Only)">
       <div className="space-y-6">
         {/* Key Metrics */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
@@ -101,7 +101,7 @@ const Dashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-5">
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
               <div className="rounded-lg bg-stall-available p-4 text-center">
                 <div className="text-2xl font-bold">{availableStalls}</div>
                 <p className="text-sm">Available</p>
@@ -138,7 +138,7 @@ const Dashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
               <div className="p-4 rounded-lg bg-muted">
                 <p className="text-sm text-muted-foreground">Total Payments</p>
                 <p className="text-2xl font-bold">{payments.length}</p>

@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { StallStatus, Stall } from '@/types/database';
-import { Search, Eye, ExternalLink } from 'lucide-react';
+import { Search, Eye, ExternalLink, Square } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const statusColors: Record<StallStatus, string> = { 
@@ -73,7 +73,7 @@ const Stalls = () => {
   return (
     <MockAppLayout title="Stalls" subtitle="View stall allocations (managed via Transactions)">
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-5">
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           <Card><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.length}</div><p className="text-sm text-muted-foreground">Total</p></CardContent></Card>
           <Card className="border-l-4 border-l-emerald-400"><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.filter(s => s.status === 'available').length}</div><p className="text-sm text-muted-foreground">Available</p></CardContent></Card>
           <Card className="border-l-4 border-l-green-400"><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.filter(s => s.status === 'sold').length}</div><p className="text-sm text-muted-foreground">Fully Paid</p></CardContent></Card>
@@ -200,7 +200,7 @@ const Stalls = () => {
 
       {/* View Stall Details Dialog */}
       <Dialog open={!!viewingStall} onOpenChange={(o) => !o && setViewingStall(null)}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="w-[95vw] max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               Stall {viewingStall?.stall_number}
