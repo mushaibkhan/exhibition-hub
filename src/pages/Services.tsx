@@ -110,7 +110,7 @@ const Services = () => {
   return (
     <MockAppLayout title="Services" subtitle="Add-on services assigned to stalls">
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           {(Object.keys(grouped) as ServiceCategory[]).map(cat => { 
             const Icon = categoryIcons[cat]; 
             const rev = grouped[cat].reduce((s, x) => s + x.price * x.sold_quantity, 0); 
@@ -146,7 +146,7 @@ const Services = () => {
           </Select>
           {isAdmin && (
             <Dialog open={dialogOpen && !!editingService} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
-              <DialogContent className="sm:max-w-[500px]">
+              <DialogContent className="w-[95vw] max-w-[500px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Edit Service</DialogTitle>
                 </DialogHeader>
