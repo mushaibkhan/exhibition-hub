@@ -57,7 +57,7 @@ const Payments = () => {
     <MockAppLayout title="Payments" subtitle="Payment records (Admin Only)">
       <div className="space-y-6">
         <div className="flex justify-end">
-          <Button variant="outline" onClick={handleExport} disabled={payments.length === 0 || isExporting}>
+          <Button variant="outline" onClick={handleExport} disabled={payments.length === 0 || isExporting} className="w-full sm:w-auto h-10 min-h-[44px]">
             {isExporting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -77,7 +77,7 @@ const Payments = () => {
           <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm">UPI</CardTitle><Smartphone className="h-4 w-4 text-purple-600" /></CardHeader><CardContent><div className="text-2xl font-bold">₹{stats.upi.toLocaleString()}</div></CardContent></Card>
           <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm">Bank</CardTitle><CreditCard className="h-4 w-4 text-blue-600" /></CardHeader><CardContent><div className="text-2xl font-bold">₹{stats.bank.toLocaleString()}</div></CardContent></Card>
         </div>
-        <Card><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Transaction</TableHead><TableHead>Buyer</TableHead><TableHead>Amount</TableHead><TableHead>Mode</TableHead><TableHead>Reference</TableHead></TableRow></TableHeader><TableBody>
+        <Card><CardContent className="p-0 overflow-x-auto"><div className="min-w-full"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Transaction</TableHead><TableHead>Buyer</TableHead><TableHead>Amount</TableHead><TableHead>Mode</TableHead><TableHead>Reference</TableHead></TableRow></TableHeader><TableBody>
           {payments.map((p) => { 
             const txn = transactions.find(t => t.id === p.transaction_id); 
             const lead = txn ? getLeadById(txn.lead_id) : null; 
@@ -118,7 +118,7 @@ const Payments = () => {
               </TableCell>
             </TableRow>
           )}
-        </TableBody></Table></CardContent></Card>
+          </TableBody></Table></div></CardContent></Card>
       </div>
     </MockAppLayout>
   );

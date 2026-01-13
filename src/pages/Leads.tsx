@@ -159,10 +159,10 @@ const Leads = () => {
           <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Follow Up</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-purple-600">{leads.filter(l => l.status === 'follow_up').length}</div></CardContent></Card>
           <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Converted</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-green-600">{leads.filter(l => l.status === 'converted').length}</div></CardContent></Card>
         </div>
-        <div className="flex gap-2 md:gap-4 flex-wrap">
-          <div className="relative flex-1 max-w-sm"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" /></div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="follow_up">Follow Up</SelectItem><SelectItem value="interested">Interested</SelectItem><SelectItem value="converted">Converted</SelectItem></SelectContent></Select>
-          <Button variant="outline" onClick={handleExport} disabled={filteredLeads.length === 0 || isExporting}>
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center">
+          <div className="relative flex-1 min-w-0"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-10" /></div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-full sm:w-[150px] h-10"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="follow_up">Follow Up</SelectItem><SelectItem value="interested">Interested</SelectItem><SelectItem value="converted">Converted</SelectItem></SelectContent></Select>
+          <Button variant="outline" onClick={handleExport} disabled={filteredLeads.length === 0 || isExporting} className="w-full sm:w-auto h-10 min-h-[44px]">
             {isExporting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -177,13 +177,13 @@ const Leads = () => {
           </Button>
           <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
             <DialogTrigger asChild>
-              <Button><Plus className="mr-2 h-4 w-4" />Add Lead</Button>
+              <Button className="w-full sm:w-auto h-10 min-h-[44px]"><Plus className="mr-2 h-4 w-4" />Add Lead</Button>
             </DialogTrigger>
-            <DialogContent className="w-[95vw] max-w-[600px] max-h-[90vh] overflow-y-auto">
+            <DialogContent className="w-[95vw] max-w-[600px] max-h-[95vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingLead ? 'Edit' : 'Add'} Lead</DialogTitle>
               </DialogHeader>
-              <div className="space-y-6 py-4">
+              <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
                 {/* 1. Contact Information */}
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold text-muted-foreground">1. Contact Information</h3>
@@ -237,7 +237,7 @@ const Leads = () => {
                     <div className="space-y-2">
                       <Label>Status</Label>
                       <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as LeadStatus })}>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-10 min-h-[44px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -249,25 +249,23 @@ const Leads = () => {
                       </Select>
                       <p className="text-xs text-muted-foreground">Set the initial status for this lead</p>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Preferred Size</Label>
                         <Select value={formData.interested_size} onValueChange={(v) => setFormData({ ...formData, interested_size: v })}>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10 min-h-[44px]">
                             <SelectValue placeholder="Select size" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="3x3">3x3</SelectItem>
-                            <SelectItem value="3x6">3x6</SelectItem>
-                            <SelectItem value="6x6">6x6</SelectItem>
+                            <SelectItem value="3×2">3×2 (Standard)</SelectItem>
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">Preferred stall size (optional)</p>
+                        <p className="text-xs text-muted-foreground">All stalls are 3×2 meters (optional)</p>
                       </div>
                       <div className="space-y-2">
                         <Label>Preferred Floor</Label>
                         <Select value={formData.interested_zone} onValueChange={(v) => setFormData({ ...formData, interested_zone: v })}>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10 min-h-[44px]">
                             <SelectValue placeholder="Select floor" />
                           </SelectTrigger>
                           <SelectContent>
@@ -285,19 +283,20 @@ const Leads = () => {
                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })} 
                         rows={3}
                         placeholder="Add any additional notes about this lead..."
+                        className="min-h-[80px]"
                       />
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-2 border-t">
-                <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>Cancel</Button>
-                <Button onClick={handleSubmit}>{editingLead ? 'Update' : 'Add'} Lead</Button>
+              <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end pt-2 border-t">
+                <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }} className="w-full sm:w-auto h-10 min-h-[44px]">Cancel</Button>
+                <Button onClick={handleSubmit} disabled={isSubmitting} className="w-full sm:w-auto h-10 min-h-[44px]">{isSubmitting ? 'Saving...' : (editingLead ? 'Update' : 'Add')} Lead</Button>
               </div>
             </DialogContent>
           </Dialog>
         </div>
-        <Card><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Company</TableHead><TableHead>Status</TableHead><TableHead>Transaction</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
+        <Card><CardContent className="p-0 overflow-x-auto"><div className="min-w-full"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Company</TableHead><TableHead>Status</TableHead><TableHead>Transaction</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
           {filteredLeads.length === 0 ? (
             <TableRow>
               <TableCell colSpan={6} className="h-64 text-center">
@@ -347,7 +346,7 @@ const Leads = () => {
               </TableRow>
             );
           })}
-        </TableBody></Table></CardContent></Card>
+          </TableBody></Table></div></CardContent></Card>
         <p className="text-sm text-muted-foreground text-center">
           💡 To convert a lead, create a Transaction and add stalls/services as line items.
         </p>

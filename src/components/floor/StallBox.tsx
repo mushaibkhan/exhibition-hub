@@ -37,8 +37,12 @@ const statusLabels: Record<StallStatus, string> = {
 export const StallBox = ({ stall, assignedTo, amountPaid, totalAmount, hasServices, hasPendingPayment, serviceCount, onClick }: StallBoxProps) => {
   const { isAdmin } = useMockData();
 
-  const gridColumn = `${stall.position_x + 1} / span ${stall.width}`;
-  const gridRow = `${stall.position_y + 1} / span ${stall.height}`;
+  // Explicit grid positioning - CSS Grid uses 1-based indexing
+  // position_x and position_y are 0-based, so add 1 for grid-row-start and grid-column-start
+  const gridColumnStart = stall.position_x + 1;
+  const gridColumnEnd = gridColumnStart + stall.width;
+  const gridRowStart = stall.position_y + 1;
+  const gridRowEnd = gridRowStart + stall.height;
 
   // Determine border style for pending payment - use orange/amber color
   const borderStyle = hasPendingPayment 
@@ -50,9 +54,14 @@ export const StallBox = ({ stall, assignedTo, amountPaid, totalAmount, hasServic
       <TooltipTrigger asChild>
         <button
           onClick={onClick}
-          style={{ gridColumn, gridRow }}
+          style={{ 
+            gridColumnStart,
+            gridColumnEnd,
+            gridRowStart,
+            gridRowEnd
+          }}
           className={cn(
-            'relative flex min-h-[80px] flex-col items-center justify-center rounded-lg p-2 text-foreground transition-all duration-200',
+            'relative flex min-h-[60px] sm:min-h-[80px] flex-col items-center justify-center rounded-lg p-1 sm:p-2 text-foreground transition-all duration-200 touch-manipulation',
             statusStyles[stall.status],
             borderStyle
           )}
@@ -67,8 +76,8 @@ export const StallBox = ({ stall, assignedTo, amountPaid, totalAmount, hasServic
               )}
             </div>
           )}
-          <span className="text-lg font-bold">{stall.stall_number}</span>
-          <span className="text-xs opacity-70">{stall.size}</span>
+          <span className="text-sm sm:text-lg font-bold">{stall.stall_number}</span>
+          <span className="text-[10px] sm:text-xs opacity-70">{stall.size}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="right" className="max-w-xs">

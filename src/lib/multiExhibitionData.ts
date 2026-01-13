@@ -105,12 +105,14 @@ const EXHIBITION_LEADS = {
 // Generate unique IDs prefixed by exhibition
 const genId = (exhibitionId: string, type: string, idx: number) => `${exhibitionId}_${type}_${idx}`;
 
-// Generate stall positions for a floor layout with exhibition-specific prefixes
-const generateFloorStalls = (
-  exhibitionId: string, 
-  floor: number, 
-  prefix: string, 
-  count: number, 
+// Generate fixed layout stalls matching the PNG blueprint exactly
+// Layout: Outer frame (28 stalls) + Inner block (12 stalls) = 40 stalls total
+// Grid: 12 columns (0-11) × 7 rows (0-6)
+// All stalls are 3×2 meters
+const generateFixedLayoutStalls = (
+  exhibitionId: string,
+  floor: number,
+  prefix: string,
   baseRent: number
 ) => {
   const stalls: Array<{
@@ -124,25 +126,121 @@ const generateFloorStalls = (
     base_rent: number;
   }> = [];
 
-  const cols = 10;
-  for (let i = 0; i < count; i++) {
-    const row = Math.floor(i / cols);
-    const col = i % cols;
-    
-    // Deterministic variety in stall sizes based on position
-    const isPremium = (i % 12 === 0);
-    const isLarge = (i % 7 === 0) && !isPremium;
-    
+  let stallIndex = 0;
+
+  // Location-based pricing multipliers
+  const getPriceMultiplier = (x: number, y: number, isInner: boolean): number => {
+    if (isInner) {
+      return 1.2; // Inner block premium
+    }
+    if (floor === 2) {
+      return 1.25; // Floor 2 premium
+    }
+    // Floor 1 perimeter
+    if (y === 0 || y === 6) {
+      return 1.0; // Top/bottom rows
+    }
+    return 1.1; // Side rows (slightly premium)
+  };
+
+  // OUTER FRAME - Top Row: 12 stalls (columns 0-11, row 0)
+  for (let x = 0; x < 12; x++) {
+    stallIndex++;
+    const isInner = false;
     stalls.push({
-      stall_number: `${prefix}${String(i + 1).padStart(2, '0')}`,
-      size: isPremium ? '6x6' : isLarge ? '3x6' : '3x3',
+      stall_number: `${prefix}${String(stallIndex).padStart(2, '0')}`,
+      size: '3×2',
       zone: `Floor ${floor}`,
-      position_x: col + (col >= 5 ? 2 : 0), // Gap in middle for pathway
-      position_y: row,
-      width: isPremium ? 2 : 1,
-      height: isPremium ? 2 : isLarge ? 2 : 1,
-      base_rent: Math.round(isPremium ? baseRent * 3 : isLarge ? baseRent * 1.8 : baseRent),
+      position_x: x,
+      position_y: 0,
+      width: 1,
+      height: 1,
+      base_rent: Math.round(baseRent * getPriceMultiplier(x, 0, isInner)),
     });
+  }
+
+  // OUTER FRAME - Left Vertical Side: 5 stalls (column 0, rows 1-5)
+  // Note: Row 0 and row 6 are already counted in top/bottom rows
+  for (let y = 1; y <= 5; y++) {
+    stallIndex++;
+    const isInner = false;
+    stalls.push({
+      stall_number: `${prefix}${String(stallIndex).padStart(2, '0')}`,
+      size: '3×2',
+      zone: `Floor ${floor}`,
+      position_x: 0,
+      position_y: y,
+      width: 1,
+      height: 1,
+      base_rent: Math.round(baseRent * getPriceMultiplier(0, y, isInner)),
+    });
+  }
+
+  // OUTER FRAME - Right Vertical Side: 5 stalls (column 11, rows 1-5)
+  for (let y = 1; y <= 5; y++) {
+    stallIndex++;
+    const isInner = false;
+    stalls.push({
+      stall_number: `${prefix}${String(stallIndex).padStart(2, '0')}`,
+      size: '3×2',
+      zone: `Floor ${floor}`,
+      position_x: 11,
+      position_y: y,
+      width: 1,
+      height: 1,
+      base_rent: Math.round(baseRent * getPriceMultiplier(11, y, isInner)),
+    });
+  }
+
+  // OUTER FRAME - Bottom Row: 10 stalls with gap
+  // Left segment: 5 stalls (columns 0-4, row 6)
+  for (let x = 0; x <= 4; x++) {
+    stallIndex++;
+    const isInner = false;
+    stalls.push({
+      stall_number: `${prefix}${String(stallIndex).padStart(2, '0')}`,
+      size: '3×2',
+      zone: `Floor ${floor}`,
+      position_x: x,
+      position_y: 6,
+      width: 1,
+      height: 1,
+      base_rent: Math.round(baseRent * getPriceMultiplier(x, 6, isInner)),
+    });
+  }
+  // Right segment: 5 stalls (columns 7-11, row 6) - gap at columns 5-6
+  for (let x = 7; x <= 11; x++) {
+    stallIndex++;
+    const isInner = false;
+    stalls.push({
+      stall_number: `${prefix}${String(stallIndex).padStart(2, '0')}`,
+      size: '3×2',
+      zone: `Floor ${floor}`,
+      position_x: x,
+      position_y: 6,
+      width: 1,
+      height: 1,
+      base_rent: Math.round(baseRent * getPriceMultiplier(x, 6, isInner)),
+    });
+  }
+
+  // INNER BLOCK - 2 rows × 6 columns = 12 stalls
+  // Positioned centrally: columns 3-8, rows 2-3
+  for (let y = 2; y <= 3; y++) {
+    for (let x = 3; x <= 8; x++) {
+      stallIndex++;
+      const isInner = true;
+      stalls.push({
+        stall_number: `${prefix}${String(stallIndex).padStart(2, '0')}`,
+        size: '3×2',
+        zone: `Floor ${floor}`,
+        position_x: x,
+        position_y: y,
+        width: 1,
+        height: 1,
+        base_rent: Math.round(baseRent * getPriceMultiplier(x, y, isInner)),
+      });
+    }
   }
 
   return stalls;
@@ -162,7 +260,7 @@ const generateLeads = (exhibitionId: string): Lead[] => {
     email: c.email,
     company: c.company,
     status: statuses[idx % 5],
-    interested_size: idx % 3 === 0 ? '6x6' : '3x3',
+    interested_size: '3×2', // All stalls are now 3×2
     interested_zone: `Floor ${(idx % 2) + 1}`,
     notes: null,
     created_by: null,
@@ -247,11 +345,12 @@ export interface ExhibitionDataset {
 const generateStallsWithDeterministicStatus = (exhibitionId: string): Stall[] => {
   const config = EXHIBITION_CONFIGS[exhibitionId as keyof typeof EXHIBITION_CONFIGS];
   
-  const floor1Stalls = generateFloorStalls(
-    exhibitionId, 1, config.stallPrefix1, config.floor1Count, config.baseRent
+  // All exhibitions use the same fixed layout (46 stalls per floor)
+  const floor1Stalls = generateFixedLayoutStalls(
+    exhibitionId, 1, config.stallPrefix1, config.baseRent
   );
-  const floor2Stalls = generateFloorStalls(
-    exhibitionId, 2, config.stallPrefix2, config.floor2Count, Math.round(config.baseRent * 1.25)
+  const floor2Stalls = generateFixedLayoutStalls(
+    exhibitionId, 2, config.stallPrefix2, config.baseRent
   );
   const allPositions = [...floor1Stalls, ...floor2Stalls];
 
@@ -277,15 +376,15 @@ const generateStallsWithDeterministicStatus = (exhibitionId: string): Stall[] =>
     return {
       id: genId(exhibitionId, 'stall', idx + 1),
       stall_number: pos.stall_number,
-      size: pos.size,
+      size: '3×2', // All stalls are standardized to 3×2 meters
       zone: pos.zone,
       base_rent: pos.base_rent,
       status,
       notes: status === 'blocked' ? 'Reserved for organizer setup' : null,
       position_x: pos.position_x,
       position_y: pos.position_y,
-      width: pos.width,
-      height: pos.height,
+      width: 1, // All stalls occupy 1×1 grid cells
+      height: 1,
       created_at: new Date(2024, 0, 1).toISOString(),
       updated_at: new Date(2024, 0, 15).toISOString(),
       lead_id: null,

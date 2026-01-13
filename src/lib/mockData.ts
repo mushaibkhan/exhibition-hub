@@ -27,7 +27,7 @@ const generateFloor1Stalls = () => {
   for (let i = 1; i <= 6; i++) {
     stalls.push({
       stall_number: `G${i}`,
-      size: '3x3',
+      size: '3×2',
       zone: 'Floor 1',
       position_x: i - 1,
       position_y: 0,
@@ -41,7 +41,7 @@ const generateFloor1Stalls = () => {
   for (let i = 7; i <= 12; i++) {
     stalls.push({
       stall_number: `G${i}`,
-      size: '3x3',
+      size: '3×2',
       zone: 'Floor 1',
       position_x: i - 1 + 2, // Gap for pathway
       position_y: 0,
@@ -55,7 +55,7 @@ const generateFloor1Stalls = () => {
   for (let i = 13; i <= 16; i++) {
     stalls.push({
       stall_number: `G${i}`,
-      size: '3x3',
+      size: '3×2',
       zone: 'Floor 1',
       position_x: i - 13,
       position_y: 1,
@@ -66,13 +66,13 @@ const generateFloor1Stalls = () => {
   }
   
   // Second row - Premium stalls
-  stalls.push({ stall_number: 'G17', size: '6x6', zone: 'Floor 1', position_x: 4, position_y: 1, width: 2, height: 2, base_rent: 75000 });
+  stalls.push({ stall_number: 'G17', size: '3×2', zone: 'Floor 1', position_x: 4, position_y: 1, width: 1, height: 1, base_rent: 25000 });
   
   // Second row - Right side
   for (let i = 18; i <= 21; i++) {
     stalls.push({
       stall_number: `G${i}`,
-      size: '3x3',
+      size: '3×2',
       zone: 'Floor 1',
       position_x: i - 18 + 10,
       position_y: 1,
@@ -86,7 +86,7 @@ const generateFloor1Stalls = () => {
   for (let i = 22; i <= 25; i++) {
     stalls.push({
       stall_number: `G${i}`,
-      size: '3x3',
+      size: '3×2',
       zone: 'Floor 1',
       position_x: i - 22,
       position_y: 2,
@@ -100,7 +100,7 @@ const generateFloor1Stalls = () => {
   for (let i = 26; i <= 29; i++) {
     stalls.push({
       stall_number: `G${i}`,
-      size: '3x3',
+      size: '3×2',
       zone: 'Floor 1',
       position_x: i - 26 + 10,
       position_y: 2,
@@ -111,16 +111,16 @@ const generateFloor1Stalls = () => {
   }
 
   // Fourth row - Left side
-  stalls.push({ stall_number: 'G30', size: '3x6', zone: 'Floor 1', position_x: 0, position_y: 3, width: 1, height: 2, base_rent: 45000 });
-  stalls.push({ stall_number: 'G31', size: '3x6', zone: 'Floor 1', position_x: 1, position_y: 3, width: 1, height: 2, base_rent: 45000 });
+  stalls.push({ stall_number: 'G30', size: '3×2', zone: 'Floor 1', position_x: 0, position_y: 3, width: 1, height: 1, base_rent: 25000 });
+  stalls.push({ stall_number: 'G31', size: '3×2', zone: 'Floor 1', position_x: 1, position_y: 3, width: 1, height: 1, base_rent: 25000 });
   stalls.push({ stall_number: 'G32', size: '3x3', zone: 'Floor 1', position_x: 2, position_y: 3, width: 1, height: 1, base_rent: 25000 });
   stalls.push({ stall_number: 'G33', size: '3x3', zone: 'Floor 1', position_x: 3, position_y: 3, width: 1, height: 1, base_rent: 25000 });
   
   // Fourth row - Right side
   stalls.push({ stall_number: 'G34', size: '3x3', zone: 'Floor 1', position_x: 10, position_y: 3, width: 1, height: 1, base_rent: 25000 });
   stalls.push({ stall_number: 'G35', size: '3x3', zone: 'Floor 1', position_x: 11, position_y: 3, width: 1, height: 1, base_rent: 25000 });
-  stalls.push({ stall_number: 'G36', size: '3x6', zone: 'Floor 1', position_x: 12, position_y: 3, width: 1, height: 2, base_rent: 45000 });
-  stalls.push({ stall_number: 'G37', size: '3x6', zone: 'Floor 1', position_x: 13, position_y: 3, width: 1, height: 2, base_rent: 45000 });
+  stalls.push({ stall_number: 'G36', size: '3×2', zone: 'Floor 1', position_x: 12, position_y: 3, width: 1, height: 1, base_rent: 25000 });
+  stalls.push({ stall_number: 'G37', size: '3×2', zone: 'Floor 1', position_x: 13, position_y: 3, width: 1, height: 1, base_rent: 25000 });
 
   // Fifth row
   stalls.push({ stall_number: 'G38', size: '3x3', zone: 'Floor 1', position_x: 2, position_y: 4, width: 1, height: 1, base_rent: 25000 });
@@ -132,7 +132,7 @@ const generateFloor1Stalls = () => {
   for (let i = 42; i <= 47; i++) {
     stalls.push({
       stall_number: `G${i}`,
-      size: '3x3',
+      size: '3×2',
       zone: 'Floor 1',
       position_x: i - 42,
       position_y: 5,
@@ -145,7 +145,7 @@ const generateFloor1Stalls = () => {
   for (let i = 48; i <= 53; i++) {
     stalls.push({
       stall_number: `G${i}`,
-      size: '3x3',
+      size: '3×2',
       zone: 'Floor 1',
       position_x: i - 48 + 8,
       position_y: 5,
@@ -175,7 +175,7 @@ const generateFloor2Stalls = () => {
   for (let i = 1; i <= 5; i++) {
     stalls.push({
       stall_number: `F${i}`,
-      size: '3x3',
+      size: '3×2',
       zone: 'Floor 2',
       position_x: i - 1,
       position_y: 0,
@@ -188,7 +188,7 @@ const generateFloor2Stalls = () => {
   for (let i = 6; i <= 10; i++) {
     stalls.push({
       stall_number: `F${i}`,
-      size: '3x3',
+      size: '3×2',
       zone: 'Floor 2',
       position_x: i - 6 + 7,
       position_y: 0,
@@ -199,7 +199,7 @@ const generateFloor2Stalls = () => {
   }
 
   // Second row
-  stalls.push({ stall_number: 'F11', size: '6x6', zone: 'Floor 2', position_x: 0, position_y: 1, width: 2, height: 2, base_rent: 85000 });
+  stalls.push({ stall_number: 'F11', size: '3×2', zone: 'Floor 2', position_x: 0, position_y: 1, width: 1, height: 1, base_rent: 30000 });
   stalls.push({ stall_number: 'F12', size: '3x3', zone: 'Floor 2', position_x: 2, position_y: 1, width: 1, height: 1, base_rent: 30000 });
   stalls.push({ stall_number: 'F13', size: '3x3', zone: 'Floor 2', position_x: 3, position_y: 1, width: 1, height: 1, base_rent: 30000 });
   stalls.push({ stall_number: 'F14', size: '3x3', zone: 'Floor 2', position_x: 4, position_y: 1, width: 1, height: 1, base_rent: 30000 });
@@ -207,7 +207,7 @@ const generateFloor2Stalls = () => {
   stalls.push({ stall_number: 'F15', size: '3x3', zone: 'Floor 2', position_x: 7, position_y: 1, width: 1, height: 1, base_rent: 30000 });
   stalls.push({ stall_number: 'F16', size: '3x3', zone: 'Floor 2', position_x: 8, position_y: 1, width: 1, height: 1, base_rent: 30000 });
   stalls.push({ stall_number: 'F17', size: '3x3', zone: 'Floor 2', position_x: 9, position_y: 1, width: 1, height: 1, base_rent: 30000 });
-  stalls.push({ stall_number: 'F18', size: '6x6', zone: 'Floor 2', position_x: 10, position_y: 1, width: 2, height: 2, base_rent: 85000 });
+  stalls.push({ stall_number: 'F18', size: '3×2', zone: 'Floor 2', position_x: 10, position_y: 1, width: 1, height: 1, base_rent: 30000 });
 
   // Third row
   stalls.push({ stall_number: 'F19', size: '3x3', zone: 'Floor 2', position_x: 2, position_y: 2, width: 1, height: 1, base_rent: 30000 });
@@ -218,14 +218,14 @@ const generateFloor2Stalls = () => {
   stalls.push({ stall_number: 'F24', size: '3x3', zone: 'Floor 2', position_x: 9, position_y: 2, width: 1, height: 1, base_rent: 30000 });
 
   // Fourth row - Mixed
-  stalls.push({ stall_number: 'F25', size: '3x6', zone: 'Floor 2', position_x: 0, position_y: 3, width: 1, height: 2, base_rent: 55000 });
+  stalls.push({ stall_number: 'F25', size: '3×2', zone: 'Floor 2', position_x: 0, position_y: 3, width: 1, height: 1, base_rent: 30000 });
   stalls.push({ stall_number: 'F26', size: '3x3', zone: 'Floor 2', position_x: 1, position_y: 3, width: 1, height: 1, base_rent: 30000 });
   stalls.push({ stall_number: 'F27', size: '3x3', zone: 'Floor 2', position_x: 2, position_y: 3, width: 1, height: 1, base_rent: 30000 });
   stalls.push({ stall_number: 'F28', size: '3x3', zone: 'Floor 2', position_x: 3, position_y: 3, width: 1, height: 1, base_rent: 30000 });
   stalls.push({ stall_number: 'F29', size: '3x3', zone: 'Floor 2', position_x: 8, position_y: 3, width: 1, height: 1, base_rent: 30000 });
   stalls.push({ stall_number: 'F30', size: '3x3', zone: 'Floor 2', position_x: 9, position_y: 3, width: 1, height: 1, base_rent: 30000 });
   stalls.push({ stall_number: 'F31', size: '3x3', zone: 'Floor 2', position_x: 10, position_y: 3, width: 1, height: 1, base_rent: 30000 });
-  stalls.push({ stall_number: 'F32', size: '3x6', zone: 'Floor 2', position_x: 11, position_y: 3, width: 1, height: 2, base_rent: 55000 });
+  stalls.push({ stall_number: 'F32', size: '3×2', zone: 'Floor 2', position_x: 11, position_y: 3, width: 1, height: 1, base_rent: 30000 });
 
   // Fifth row
   stalls.push({ stall_number: 'F33', size: '3x3', zone: 'Floor 2', position_x: 1, position_y: 4, width: 1, height: 1, base_rent: 30000 });

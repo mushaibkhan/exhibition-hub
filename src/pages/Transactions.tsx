@@ -16,6 +16,8 @@ import { PaymentStatus, PaymentMode, Lead, TransactionItem } from '@/types/datab
 import { Search, ChevronDown, ChevronUp, Plus, CreditCard, Receipt, ShoppingCart, PlusCircle, X, Trash2, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { ResponsiveDataView } from '@/components/ui/responsive-table';
 
 const statusColors: Record<PaymentStatus, string> = { 
   unpaid: 'bg-red-100 text-red-800', 
@@ -36,6 +38,7 @@ const Transactions = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Create Transaction Dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -427,14 +430,14 @@ const Transactions = () => {
           </div>
         )}
 
-        <div className="flex gap-4 flex-wrap items-center justify-between">
-          <div className="flex gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-1">
+            <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+              <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-10" />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-[150px] h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="unpaid">Unpaid</SelectItem>
@@ -443,15 +446,16 @@ const Transactions = () => {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={() => setCreateDialogOpen(true)}>
+          <Button onClick={() => setCreateDialogOpen(true)} className="w-full sm:w-auto h-10 min-h-[44px]">
             <Plus className="h-4 w-4 mr-2" />
             Create Transaction
           </Button>
         </div>
 
         <Card>
-          <CardContent className="p-0">
-            <Table>
+          <CardContent className="p-0 overflow-x-auto">
+            <div className="min-w-full">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10"></TableHead>
@@ -701,9 +705,10 @@ const Transactions = () => {
                 )}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
-      </div>
+        </div>
 
       {/* Create Transaction Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={(open) => {
@@ -715,7 +720,7 @@ const Transactions = () => {
           setTxnNotes('');
         }
       }}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-[600px] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Transaction</DialogTitle>
             {selectedLead && (
@@ -731,14 +736,14 @@ const Transactions = () => {
               </div>
             )}
           </DialogHeader>
-          <div className="space-y-6 py-4">
+          <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
             {/* 1. Buyer Selection */}
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               <h3 className="text-sm font-semibold text-muted-foreground">1. Buyer</h3>
               <div className="space-y-2">
                 <Label>Select Buyer (Lead)</Label>
               <Select value={selectedLead} onValueChange={setSelectedLead}>
-                <SelectTrigger>
+                <SelectTrigger className="h-10 min-h-[44px]">
                   <SelectValue placeholder="Choose a lead..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -794,7 +799,7 @@ const Transactions = () => {
                   value=""
                   disabled={leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction}
                 >
-                  <SelectTrigger className={leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction ? 'opacity-50 cursor-not-allowed' : ''}>
+                  <SelectTrigger className={`h-10 min-h-[44px] ${leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     <SelectValue placeholder={
                       leadOwnsStalls && hasServicesInTransaction && !hasStallsInTransaction
                         ? "This buyer already owns stalls. Use 'Add Services' to add services to existing stalls."
@@ -813,7 +818,7 @@ const Transactions = () => {
                     ) : (
                       availableStallsForLead.map(stall => (
                         <SelectItem key={stall.id} value={stall.id} disabled={selectedItems.some(i => i.id === stall.id)}>
-                          {stall.stall_number} ({stall.size}) - ₹{stall.base_rent.toLocaleString()}
+                          {stall.stall_number} - ₹{stall.base_rent.toLocaleString()}
                         </SelectItem>
                       ))
                     )}
@@ -849,7 +854,7 @@ const Transactions = () => {
               <div className="space-y-2">
                 <Label>Add Services</Label>
                 <Select onValueChange={(v) => handleAddItem('service', v)} value="">
-                  <SelectTrigger>
+                  <SelectTrigger className="h-10 min-h-[44px]">
                     <SelectValue placeholder="Select a service to add..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -895,7 +900,7 @@ const Transactions = () => {
                 <div className="space-y-2">
                   <Label>Apply Services To Stall *</Label>
                 <Select value={selectedStallForServices} onValueChange={setSelectedStallForServices}>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-10 min-h-[44px]">
                     <SelectValue placeholder="Choose an existing stall..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -913,7 +918,7 @@ const Transactions = () => {
                         }
                         return leadStalls.map(stall => (
                           <SelectItem key={stall.id} value={stall.id}>
-                            {stall.stall_number} ({stall.size}) - {stall.zone}
+                            {stall.stall_number} - {stall.zone}
                           </SelectItem>
                         ));
                       } catch (error) {
@@ -1019,17 +1024,17 @@ const Transactions = () => {
             {/* Notes */}
             <div className="space-y-2">
               <Label>Notes</Label>
-              <Textarea value={txnNotes} onChange={(e) => setTxnNotes(e.target.value)} placeholder="Add notes..." rows={2} />
+              <Textarea value={txnNotes} onChange={(e) => setTxnNotes(e.target.value)} placeholder="Add notes..." rows={3} className="min-h-[80px]" />
             </div>
           </div>
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+          <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end pt-4">
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} className="w-full sm:w-auto h-10 min-h-[44px]">Cancel</Button>
             <Button 
               onClick={handleCreateTransaction} 
-              disabled={!canCreateTransaction}
-              className={!canCreateTransaction ? 'opacity-50 cursor-not-allowed' : ''}
+              disabled={!canCreateTransaction || isSubmitting}
+              className={`w-full sm:w-auto h-10 min-h-[44px] ${!canCreateTransaction ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              Create Transaction
+              {isSubmitting ? 'Creating...' : 'Create Transaction'}
             </Button>
           </div>
         </DialogContent>
@@ -1037,7 +1042,7 @@ const Transactions = () => {
 
       {/* Add Payment Dialog */}
       <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="w-[95vw] sm:max-w-[450px] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
           </DialogHeader>
@@ -1080,6 +1085,7 @@ const Transactions = () => {
                 placeholder="Enter amount" 
                 min="0"
                 step="0.01"
+                className="h-10 min-h-[44px] text-base"
               />
               {paymentTxnId && (() => {
                 const txn = transactions.find(t => t.id === paymentTxnId);
@@ -1096,7 +1102,7 @@ const Transactions = () => {
             <div className="space-y-2">
               <Label>Payment Mode</Label>
               <Select value={paymentMode} onValueChange={(v) => setPaymentMode(v as PaymentMode)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-10 min-h-[44px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="upi">UPI</SelectItem>
@@ -1108,7 +1114,7 @@ const Transactions = () => {
             <div className="space-y-2">
               <Label>Account (Optional)</Label>
               <Select value={paymentAccount} onValueChange={setPaymentAccount}>
-                <SelectTrigger><SelectValue placeholder="Select account..." /></SelectTrigger>
+                <SelectTrigger className="h-10 min-h-[44px]"><SelectValue placeholder="Select account..." /></SelectTrigger>
                 <SelectContent>
                   {accounts.filter(a => a.is_active).map(acc => (
                     <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
@@ -1119,17 +1125,17 @@ const Transactions = () => {
 
             <div className="space-y-2">
               <Label>Reference ID (Optional)</Label>
-              <Input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="UPI Ref / Cheque No..." />
+              <Input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="UPI Ref / Cheque No..." className="h-10 min-h-[44px] text-base" />
             </div>
 
             <div className="space-y-2">
               <Label>Notes</Label>
-              <Textarea value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} placeholder="Add notes..." rows={2} />
+              <Textarea value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} placeholder="Add notes..." rows={3} className="min-h-[80px]" />
             </div>
           </div>
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddPayment}>Record Payment</Button>
+          <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+            <Button variant="outline" onClick={() => setPaymentDialogOpen(false)} className="w-full sm:w-auto h-10 min-h-[44px]">Cancel</Button>
+            <Button onClick={handleAddPayment} className="w-full sm:w-auto h-10 min-h-[44px]">Record Payment</Button>
           </div>
         </DialogContent>
       </Dialog>

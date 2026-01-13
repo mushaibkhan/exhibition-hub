@@ -129,13 +129,13 @@ const Services = () => {
           })}
         </div>
 
-        <div className="flex gap-4 flex-wrap">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+          <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search services..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder="Search services..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-10" />
           </div>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[150px] h-10"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
               <SelectItem value="sponsor">Sponsor</SelectItem>
@@ -146,25 +146,26 @@ const Services = () => {
           </Select>
           {isAdmin && (
             <Dialog open={dialogOpen && !!editingService} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
-              <DialogContent className="w-[95vw] max-w-[500px] max-h-[90vh] overflow-y-auto">
+              <DialogContent className="w-[95vw] max-w-[500px] max-h-[95vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Edit Service</DialogTitle>
                 </DialogHeader>
                 {editingService && (
-                <div className="space-y-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4 py-2 sm:py-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Name *</Label>
                       <Input 
                         value={formData.name} 
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
                         placeholder="e.g., Extra Power, TV Ad"
+                        className="h-10 min-h-[44px] text-base"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Category</Label>
                       <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v as ServiceCategory })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-10 min-h-[44px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="sponsor">Sponsor</SelectItem>
                           <SelectItem value="signboard">Signboard</SelectItem>
@@ -182,17 +183,19 @@ const Services = () => {
                       value={formData.description} 
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
                       placeholder="Service description..."
-                      rows={2} 
+                      rows={3}
+                      className="min-h-[80px]"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Price (₹)</Label>
                       <Input 
                         type="number" 
                         value={formData.price} 
                         onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })} 
+                        className="h-10 min-h-[44px] text-base"
                       />
                     </div>
                     <div className="space-y-2">
@@ -201,7 +204,8 @@ const Services = () => {
                         type="number" 
                         value={formData.quantity} 
                         onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })} 
-                        disabled={formData.is_unlimited} 
+                        disabled={formData.is_unlimited}
+                        className="h-10 min-h-[44px] text-base"
                       />
                     </div>
                   </div>
@@ -221,15 +225,16 @@ const Services = () => {
                       value={formData.notes} 
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })} 
                       placeholder="Internal notes..."
-                      rows={2} 
+                      rows={3}
+                      className="min-h-[80px]"
                     />
                   </div>
                 </div>
                 )}
                 {editingService && (
-                <div className="flex justify-end gap-3">
-                  <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>Cancel</Button>
-                  <Button onClick={handleSubmit}>Update Service</Button>
+                <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+                  <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }} className="w-full sm:w-auto h-10 min-h-[44px]">Cancel</Button>
+                  <Button onClick={handleSubmit} className="w-full sm:w-auto h-10 min-h-[44px]">Update Service</Button>
                 </div>
                 )}
               </DialogContent>
@@ -238,8 +243,9 @@ const Services = () => {
         </div>
 
         <Card>
-          <CardContent className="p-0">
-            <Table>
+          <CardContent className="p-0 overflow-x-auto">
+            <div className="min-w-full">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
@@ -323,6 +329,7 @@ const Services = () => {
                 )}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       </div>

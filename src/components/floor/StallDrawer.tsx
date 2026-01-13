@@ -91,7 +91,7 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[400px] sm:w-[540px] flex flex-col max-h-screen h-screen">
+      <SheetContent className="w-full sm:w-[400px] md:w-[540px] flex flex-col max-h-screen h-screen">
         <SheetHeader className="flex-shrink-0">
           <SheetTitle className="flex items-center gap-3">
             <span>Stall {stall.stall_number}</span>
@@ -108,7 +108,7 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-muted-foreground">Size</span>
-                <p className="font-medium">{stall.size}</p>
+                <p className="font-medium">3×2</p>
               </div>
               <div>
                 <span className="text-muted-foreground">Zone</span>

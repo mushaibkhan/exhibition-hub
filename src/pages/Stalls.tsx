@@ -81,14 +81,14 @@ const Stalls = () => {
           <Card className="border-l-4 border-l-yellow-400"><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.filter(s => s.status === 'reserved').length}</div><p className="text-sm text-muted-foreground">Reserved</p></CardContent></Card>
         </div>
 
-        <div className="flex gap-4 flex-wrap items-center justify-between">
-          <div className="flex gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-1">
+            <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search stalls..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+              <Input placeholder="Search stalls..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-10" />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-[150px] h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="available">Available</SelectItem>
@@ -99,15 +99,16 @@ const Stalls = () => {
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" onClick={() => navigate('/transactions')}>
+          <Button variant="outline" onClick={() => navigate('/transactions')} className="w-full sm:w-auto h-10 min-h-[44px]">
             <ExternalLink className="h-4 w-4 mr-2" />
             Go to Transactions
           </Button>
         </div>
 
         <Card>
-          <CardContent className="p-0">
-            <Table>
+          <CardContent className="p-0 overflow-x-auto">
+            <div className="min-w-full">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Stall No.</TableHead>
@@ -131,7 +132,7 @@ const Stalls = () => {
                       >
                         {stall.stall_number}
                       </TableCell>
-                      <TableCell>{stall.size}</TableCell>
+                      <TableCell>3×2</TableCell>
                       <TableCell>{stall.zone}</TableCell>
                       {isAdmin && <TableCell>₹{stall.base_rent.toLocaleString()}</TableCell>}
                       <TableCell><Badge className={statusColors[stall.status]}>{statusLabels[stall.status]}</Badge></TableCell>
@@ -190,13 +191,14 @@ const Stalls = () => {
                 )}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
 
         <p className="text-sm text-muted-foreground text-center">
           💡 Stalls are allocated through Transactions. Create a transaction to assign a stall to a buyer.
         </p>
-      </div>
+        </div>
 
       {/* View Stall Details Dialog */}
       <Dialog open={!!viewingStall} onOpenChange={(o) => !o && setViewingStall(null)}>
@@ -212,7 +214,7 @@ const Stalls = () => {
             <div className="grid grid-cols-3 gap-4 p-3 rounded-lg bg-muted/50">
               <div>
                 <p className="text-xs text-muted-foreground">Size</p>
-                <p className="font-medium">{viewingStall?.size}</p>
+                <p className="font-medium">3×2</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Floor</p>

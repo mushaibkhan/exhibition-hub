@@ -59,35 +59,44 @@ const Index = () => {
     return { hasServices, hasPendingPayment: false, serviceCount };
   };
 
-  const renderFloorGrid = (floorStalls: Stall[], cols: number, rows: number) => (
-    <div 
-      className="floor-layout-container overflow-auto max-h-[60vh] md:max-h-none"
-      style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
-    >
+  const renderFloorGrid = (floorStalls: Stall[], cols: number, rows: number) => {
+    // Sort stalls by position to ensure consistent rendering order
+    const sortedStalls = [...floorStalls].sort((a, b) => {
+      if (a.position_y !== b.position_y) return a.position_y - b.position_y;
+      return a.position_x - b.position_x;
+    });
+
+    return (
       <div 
-        className="grid gap-1 p-2 md:p-4 bg-muted/30 rounded-lg min-w-[500px]" 
-        style={{ 
-          gridTemplateColumns: `repeat(${cols}, minmax(40px, 1fr))`, 
-          gridTemplateRows: `repeat(${rows}, minmax(40px, auto))` 
-        }}
+        className="floor-layout-container overflow-auto max-h-[70vh] md:max-h-none"
+        style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
       >
-        {floorStalls.map((stall) => {
-          const info = getStallInfo(stall);
-          return <StallBox 
-            key={stall.id} 
-            stall={stall} 
-            assignedTo={info.assignedTo} 
-            amountPaid={info.amountPaid} 
-            totalAmount={info.totalAmount}
-            hasServices={info.hasServices}
-            hasPendingPayment={info.hasPendingPayment}
-            serviceCount={info.serviceCount}
-            onClick={() => handleStallClick(stall)} 
-          />;
-        })}
+        <div 
+          className="grid gap-0.5 sm:gap-1 p-2 sm:p-4 bg-muted/30 rounded-lg min-w-full sm:min-w-[500px]" 
+          style={{ 
+            gridTemplateColumns: `repeat(${cols}, minmax(35px, 1fr))`, 
+            gridTemplateRows: `repeat(${rows}, minmax(35px, auto))`,
+            // Explicit positioning - no auto-flow
+          }}
+        >
+          {sortedStalls.map((stall) => {
+            const info = getStallInfo(stall);
+            return <StallBox 
+              key={stall.id} 
+              stall={stall} 
+              assignedTo={info.assignedTo} 
+              amountPaid={info.amountPaid} 
+              totalAmount={info.totalAmount}
+              hasServices={info.hasServices}
+              hasPendingPayment={info.hasPendingPayment}
+              serviceCount={info.serviceCount}
+              onClick={() => handleStallClick(stall)} 
+            />;
+          })}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <MockAppLayout title="Floor Layout" subtitle="Exhibition floor stall overview">
@@ -99,15 +108,15 @@ const Index = () => {
             <TabsTrigger value="floor2" className="text-xs md:text-sm">Floor 2 (First)</TabsTrigger>
           </TabsList>
           <TabsContent value="floor1" className="mt-4">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="mb-4 text-lg font-semibold">Ground Floor - {floor1Stalls.length} Stalls</h3>
-              {renderFloorGrid(floor1Stalls, 14, 6)}
+            <div className="rounded-xl border bg-card p-3 sm:p-6 shadow-sm">
+              <h3 className="mb-3 sm:mb-4 text-base sm:text-lg font-semibold">Ground Floor - {floor1Stalls.length} Stalls</h3>
+              {renderFloorGrid(floor1Stalls, 12, 7)}
             </div>
           </TabsContent>
           <TabsContent value="floor2" className="mt-4">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="mb-4 text-lg font-semibold">First Floor - {floor2Stalls.length} Stalls</h3>
-              {renderFloorGrid(floor2Stalls, 12, 5)}
+            <div className="rounded-xl border bg-card p-3 sm:p-6 shadow-sm">
+              <h3 className="mb-3 sm:mb-4 text-base sm:text-lg font-semibold">First Floor - {floor2Stalls.length} Stalls</h3>
+              {renderFloorGrid(floor2Stalls, 12, 7)}
             </div>
           </TabsContent>
         </Tabs>
