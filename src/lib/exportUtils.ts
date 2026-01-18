@@ -13,7 +13,9 @@ export function exportToExcel(
   sheetName: string = 'Sheet1'
 ): void {
   if (!data || data.length === 0) {
-    console.warn('No data to export');
+    if (import.meta.env.DEV) {
+      console.warn('No data to export');
+    }
     return;
   }
 

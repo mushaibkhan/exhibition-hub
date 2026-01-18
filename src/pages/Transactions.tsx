@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
-import { useMockData } from '@/contexts/MockDataContext';
+import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useExhibition } from '@/contexts/ExhibitionContext';
+import { buildInvoiceData, generateInvoiceNumber } from '@/lib/invoiceUtils';
+import { downloadInvoicePDF } from '@/lib/generateInvoicePDF';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +16,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { PaymentStatus, PaymentMode, Lead, TransactionItem } from '@/types/database';
-import { Search, ChevronDown, ChevronUp, Plus, CreditCard, Receipt, ShoppingCart, PlusCircle, X, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Plus, CreditCard, Receipt, ShoppingCart, PlusCircle, X, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -29,11 +32,12 @@ const statusLabels: Record<PaymentStatus, string> = { unpaid: 'Unpaid', partial:
 const Transactions = () => {
   const navigate = useNavigate();
   const { 
-    transactions, leads, stalls, services, accounts, transactionItems,
+    transactions, leads, stalls, services, accounts, transactionItems, payments,
     getLeadById, getItemsByTransactionId, getPaymentsByTransactionId, getAvailableStalls, getStallsByLeadId, getStallById,
     addTransaction, addPayment, cancelTransaction, removeServiceFromTransaction, deletePayment,
     isAdmin 
   } = useMockData();
+  const { currentExhibition } = useExhibition();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -138,7 +142,7 @@ const Transactions = () => {
         return;
       }
       
-      setSelectedItems([...selectedItems, { type, id, name: `Stall ${stall.stall_number}`, price: stall.base_rent }]);
+        setSelectedItems([...selectedItems, { type, id, name: `Stall ${stall.stall_number}`, price: stall.base_rent }]);
       // Clear selectedStallForServices if a stall is added (stall in transaction takes precedence)
       if (selectedStallForServices) {
         setSelectedStallForServices('');
@@ -180,7 +184,9 @@ const Transactions = () => {
     ? 'New Stall Purchase' 
     : 'Service Add-on (Existing Stall)';
 
-  const handleCreateTransaction = () => {
+  const handleCreateTransaction = async () => {
+    if (isSubmitting) return;
+    
     if (!selectedLead || selectedItems.length === 0) {
       toast({ 
         title: 'Missing Information', 
@@ -271,51 +277,61 @@ const Transactions = () => {
       item_name: item.name,
       stall_id: item.type === 'stall' ? item.id : null,
       service_id: item.type === 'service' ? item.id : null,
-      size: item.type === 'stall' ? stalls.find(s => s.id === item.id)?.size || null : null,
+      size: item.type === 'stall' ? '3×2' : null, // All stalls are now 3×2 standard size
       base_price: item.price,
       addon_price: 0,
       final_price: item.price,
+      exhibition_id: currentExhibition?.id || '',
     }));
 
     // Determine selectedStallId: use selectedStallForServices if services-only, otherwise undefined
     const isServiceOnly = hasServices && !hasStalls;
     const selectedStallId = isServiceOnly ? selectedStallForServices : undefined;
 
-    // Calculate transaction number before creating (since it's based on current count)
-    const txnNumber = `TXN-2024-${String(transactions.length + 1).padStart(3, '0')}`;
-    
-    addTransaction({
+    setIsSubmitting(true);
+    try {
+      await addTransaction({
       lead_id: selectedLead,
       total_amount: totalAmount,
-      amount_paid: 0,
-      payment_status: 'unpaid',
       notes: txnNotes || null,
       created_by: null,
-    }, items, selectedStallId);
+      exhibition_id: currentExhibition?.id || '',
+      cancelled: false,
+      cancelled_at: null,
+      }, items, selectedStallId);
 
-    // Enhanced toast messages
-    const lead = getLeadById(selectedLead);
-    const leadName = lead?.name || 'Buyer';
-    const stallItems = selectedItems.filter(i => i.type === 'stall');
-    const serviceItems = selectedItems.filter(i => i.type === 'service');
-    
-    let toastMessage = '';
-    if (stallItems.length > 0) {
-      const stallNumbers = stallItems.map(i => i.name.replace('Stall ', '')).join(', ');
-      toastMessage = `Stall ${stallNumbers} sold to ${leadName}. Transaction: ${txnNumber}`;
-    } else if (serviceItems.length > 0 && selectedStallId) {
-      const stall = getStallById(selectedStallId);
-      toastMessage = `Services added to Stall ${stall?.stall_number || 'selected'}. Transaction: ${txnNumber}`;
-    } else {
-      toastMessage = `Transaction created successfully. Transaction: ${txnNumber}`;
-    }
-    
-    toast({ title: 'Success', description: toastMessage });
+      // Enhanced toast messages
+      const lead = getLeadById(selectedLead);
+      const leadName = lead?.name || 'Buyer';
+      const stallItems = selectedItems.filter(i => i.type === 'stall');
+      const serviceItems = selectedItems.filter(i => i.type === 'service');
+      
+      let toastMessage = '';
+      if (stallItems.length > 0) {
+        const stallNumbers = stallItems.map(i => i.name.replace('Stall ', '')).join(', ');
+        toastMessage = `Stall ${stallNumbers} sold to ${leadName}.`;
+      } else if (serviceItems.length > 0 && selectedStallId) {
+        const stall = getStallById(selectedStallId);
+        toastMessage = `Services added to Stall ${stall?.stall_number || 'selected'}.`;
+      } else {
+        toastMessage = `Transaction created successfully.`;
+      }
+      
+      toast({ title: 'Success', description: toastMessage });
     setCreateDialogOpen(false);
     setSelectedLead('');
     setSelectedItems([]);
-    setSelectedStallForServices('');
+      setSelectedStallForServices('');
     setTxnNotes('');
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to create transaction. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleOpenPaymentDialog = (txnId: string) => {
@@ -332,7 +348,9 @@ const Transactions = () => {
     setPaymentDialogOpen(true);
   };
 
-  const handleAddPayment = () => {
+  const handleAddPayment = async () => {
+    if (isSubmitting) return;
+    
     const amount = parseFloat(paymentAmount);
     
     // Validate amount is a positive number
@@ -366,7 +384,7 @@ const Transactions = () => {
       return;
     }
 
-    const pendingAmount = txn.total_amount - txn.amount_paid;
+    const pendingAmount = txn.total_amount - (txn.amount_paid || 0);
     
     // Validate payment doesn't exceed pending amount
     if (amount > pendingAmount) {
@@ -389,7 +407,9 @@ const Transactions = () => {
       });
     }
 
-    addPayment({
+    setIsSubmitting(true);
+    try {
+      const createdPayment = await addPayment({
       transaction_id: paymentTxnId,
       amount,
       payment_mode: paymentMode,
@@ -398,17 +418,78 @@ const Transactions = () => {
       reference_id: paymentReference || null,
       notes: paymentNotes || null,
       recorded_by: null,
+      exhibition_id: currentExhibition?.id || '',
     });
 
-    const newPending = pendingAmount - amount;
-    const successMessage = newPending === 0 
-      ? `Payment of ₹${amount.toLocaleString()} recorded. Transaction is now fully paid.`
-      : `Payment of ₹${amount.toLocaleString()} recorded. ₹${newPending.toLocaleString()} remaining.`;
+      const newPending = pendingAmount - amount;
+      const successMessage = newPending === 0 
+        ? `Payment of ₹${amount.toLocaleString()} recorded. Transaction is now fully paid.`
+        : `Payment of ₹${amount.toLocaleString()} recorded. ₹${newPending.toLocaleString()} remaining.`;
 
-    toast({ 
-      title: 'Payment Recorded Successfully', 
-      description: successMessage 
-    });
+      toast({ 
+        title: 'Payment Recorded Successfully', 
+        description: successMessage 
+      });
+
+      // Generate invoice immediately after payment creation
+      if (txn && currentExhibition) {
+        try {
+          const lead = getLeadById(txn.lead_id);
+          const items = getItemsByTransactionId(txn.id);
+          // Get all payments including the newly created one (will be in payments array after refresh, but we have it)
+          const allPayments = [...(getPaymentsByTransactionId(txn.id) || []), createdPayment];
+          
+          if (lead) {
+            // Generate invoice number
+            const invoiceNumber = await generateInvoiceNumber(payments);
+            
+            // Build invoice data
+            const invoiceData = buildInvoiceData(
+              { ...createdPayment, invoice_number: invoiceNumber } as any,
+              txn,
+              lead,
+              items,
+              allPayments,
+              {
+                id: currentExhibition.id,
+                name: currentExhibition.name,
+                short_name: currentExhibition.shortName,
+                description: currentExhibition.description || null,
+                start_date: currentExhibition.startDate,
+                end_date: currentExhibition.endDate,
+                created_at: '',
+                updated_at: '',
+              }
+            );
+            
+            // Update invoice number in data
+            invoiceData.invoiceNumber = invoiceNumber;
+            
+            // Generate and download invoice HTML file (user can print to PDF)
+            downloadInvoicePDF(invoiceData);
+            
+            // Show success message for invoice generation
+            toast({
+              title: 'Invoice Generated',
+              description: 'Invoice generated and downloaded successfully.',
+            });
+          }
+        } catch (invoiceError: any) {
+          if (import.meta.env.DEV) {
+            console.error('Error generating invoice:', invoiceError);
+          }
+          // Don't fail the payment if invoice generation fails
+          const errorMsg = invoiceError?.message || '';
+          const isTemplateError = errorMsg.includes('Failed to write') || errorMsg.includes('template');
+          toast({
+            title: 'Payment Recorded',
+            description: isTemplateError 
+              ? 'Invoice generation failed – template mismatch. Payment was recorded successfully.'
+              : 'Invoice generation failed, but payment was recorded successfully.',
+            variant: 'default',
+          });
+        }
+      }
     setPaymentDialogOpen(false);
     setPaymentAmount('');
     setPaymentMode('cash');
@@ -416,14 +497,23 @@ const Transactions = () => {
     setPaymentAccount('');
     setPaymentNotes('');
     setPaymentTxnId('');
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to record payment. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <MockAppLayout title="Transactions" subtitle="Central hub for all sales">
+    <MockAppLayout title="Bookings" subtitle="Central hub for all sales">
       <div className="space-y-6">
         {isAdmin && (
           <div className="grid gap-4 md:grid-cols-4">
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total Transactions</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats.total}</div></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total Bookings</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats.total}</div></CardContent></Card>
             <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total Value</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">₹{stats.totalAmount.toLocaleString()}</div></CardContent></Card>
             <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Collected</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-green-600">₹{stats.collected.toLocaleString()}</div></CardContent></Card>
             <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Pending</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-orange-600">₹{(stats.totalAmount - stats.collected).toLocaleString()}</div></CardContent></Card>
@@ -448,18 +538,18 @@ const Transactions = () => {
           </div>
           <Button onClick={() => setCreateDialogOpen(true)} className="w-full sm:w-auto h-10 min-h-[44px]">
             <Plus className="h-4 w-4 mr-2" />
-            Create Transaction
+            Create Booking
           </Button>
         </div>
 
         <Card>
           <CardContent className="p-0 overflow-x-auto">
             <div className="min-w-full">
-              <Table>
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10"></TableHead>
-                  <TableHead>Transaction #</TableHead>
+                  <TableHead>Booking #</TableHead>
                   <TableHead>Buyer</TableHead>
                   {isAdmin && <TableHead>Total</TableHead>}
                   {isAdmin && <TableHead>Paid</TableHead>}
@@ -543,11 +633,11 @@ const Transactions = () => {
                                 <div className="flex items-center gap-2">
                                   <AlertTriangle className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    This transaction has been cancelled
+                                    This booking has been cancelled
                                   </p>
                                 </div>
                                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 ml-6">
-                                  Only items from this transaction have been released. Previous transactions remain unchanged. This transaction is kept for audit purposes.
+                                  Only items from this booking have been released. Previous bookings remain unchanged. This booking is kept for audit purposes.
                                 </p>
                               </div>
                             )}
@@ -557,34 +647,34 @@ const Transactions = () => {
                                   <h4 className="font-semibold">Line Items {txn.cancelled && <span className="text-xs font-normal text-muted-foreground">(Cancelled)</span>}</h4>
                                 </div>
                                 {items.length === 0 ? (
-                                  <p className="text-sm text-muted-foreground italic">No items in this transaction</p>
+                                  <p className="text-sm text-muted-foreground italic">No items in this booking</p>
                                 ) : (
                                   items.map(i => {
                                   const isStall = i.item_type === 'stall';
                                   const isService = i.item_type === 'service';
                                   return (
                                     <div key={i.id} className={`flex justify-between items-center text-sm p-2 rounded mb-1 group ${txn.cancelled ? 'bg-gray-100 dark:bg-gray-800 opacity-75' : 'bg-background'}`}>
-                                      <span className="flex items-center gap-2">
+                                    <span className="flex items-center gap-2">
                                         <Receipt className={`h-3 w-3 ${txn.cancelled ? 'text-gray-400' : 'text-muted-foreground'}`} />
                                         {isStall ? (
                                           <span 
                                             className={`${txn.cancelled ? 'text-gray-500 line-through' : 'hover:text-primary hover:underline cursor-pointer'}`}
                                             onClick={txn.cancelled ? undefined : () => navigate('/', { state: { stallId: i.stall_id } })}
                                           >
-                                            {i.item_name}
+                                      {i.item_name}
                                           </span>
                                         ) : (
                                           <span className={txn.cancelled ? 'text-gray-500 line-through' : ''}>
                                             {i.item_name}
                                           </span>
                                         )}
-                                        {i.size && <span className="text-muted-foreground">({i.size})</span>}
+                                      {i.size && <span className="text-muted-foreground">({i.size})</span>}
                                         {txn.cancelled && (
                                           <Badge variant="outline" className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
                                             Cancelled
                                           </Badge>
                                         )}
-                                      </span>
+                                    </span>
                                       <div className="flex items-center gap-2">
                                         {isAdmin && <span className={txn.cancelled ? 'text-gray-500' : ''}>₹{i.final_price.toLocaleString()}</span>}
                                         {isAdmin && isService && !txn.cancelled && (
@@ -597,53 +687,62 @@ const Transactions = () => {
                                               removeServiceFromTransaction(txn.id, i.id);
                                               toast({
                                                 title: 'Service Removed',
-                                                description: `${i.item_name} has been removed from this transaction.`,
+                                                description: `${i.item_name} has been removed from this booking.`,
                                               });
                                             }}
                                           >
                                             <X className="h-3 w-3 text-destructive" />
                                           </Button>
                                         )}
-                                      </div>
+                                  </div>
                                     </div>
                                   );
                                   })
                                 )}
                               </div>
-                              {isAdmin && (
-                                <div>
-                                  <div className="flex items-center justify-between mb-2">
-                                    <h4 className="font-semibold">Payments</h4>
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className="font-semibold">Payments</h4>
+                                  <div className="flex items-center gap-2">
                                     {pendingAmount > 0 && (
                                       <span className="text-sm text-orange-600">Pending: ₹{pendingAmount.toLocaleString()}</span>
                                     )}
+                                    {!txn.cancelled && txn.payment_status !== 'paid' && (
+                                      <Button size="sm" variant="outline" onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenPaymentDialog(txn.id);
+                                      }}>
+                                        <CreditCard className="h-4 w-4 mr-1" />
+                                        Add Payment
+                                      </Button>
+                                    )}
                                   </div>
-                                  {payments.length ? payments.map(p => (
-                                    <div key={p.id} className="flex justify-between items-center text-sm p-2 bg-background rounded mb-1 group">
-                                      <span>{format(new Date(p.payment_date), 'dd MMM')} - {p.payment_mode.toUpperCase()}</span>
-                                      <div className="flex items-center gap-2">
-                                        <span>₹{p.amount.toLocaleString()}</span>
-                                        {!txn.cancelled && (
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setDeletePaymentId(p.id);
-                                              setDeletePaymentDialogOpen(true);
-                                            }}
-                                          >
-                                            <Trash2 className="h-3 w-3 text-destructive" />
-                                          </Button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )) : (
-                                    <p className="text-sm text-muted-foreground">No payments recorded</p>
-                                  )}
                                 </div>
-                              )}
+                                {payments.length ? payments.map(p => (
+                                  <div key={p.id} className="flex justify-between items-center text-sm p-2 bg-background rounded mb-1 group">
+                                    <span>{format(new Date(p.payment_date), 'dd MMM')} - {p.payment_mode.toUpperCase()}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span>₹{p.amount.toLocaleString()}</span>
+                                      {isAdmin && !txn.cancelled && (
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDeletePaymentId(p.id);
+                                            setDeletePaymentDialogOpen(true);
+                                          }}
+                                        >
+                                          <Trash2 className="h-3 w-3 text-destructive" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                )) : (
+                                  <p className="text-sm text-muted-foreground">No payments recorded</p>
+                                )}
+                              </div>
                             </div>
                             {isAdmin && !txn.cancelled && (
                               <div className="mt-4 pt-4 border-t">
@@ -662,11 +761,11 @@ const Transactions = () => {
                                     }}
                                   >
                                     <X className="h-4 w-4 mr-1" />
-                                    Cancel Transaction
+                                    Cancel Booking
                                   </Button>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-2">
-                                  Cancelling will release only the stalls and services from this transaction. Previous transactions remain unchanged. The transaction will remain visible as cancelled for audit purposes.
+                                  Cancelling will release only the stalls and services from this booking. Previous bookings remain unchanged. The booking will remain visible as cancelled for audit purposes.
                                 </p>
                               </div>
                             )}
@@ -708,7 +807,7 @@ const Transactions = () => {
             </div>
           </CardContent>
         </Card>
-        </div>
+      </div>
 
       {/* Create Transaction Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={(open) => {
@@ -722,7 +821,7 @@ const Transactions = () => {
       }}>
         <DialogContent className="w-[95vw] sm:max-w-[600px] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Transaction</DialogTitle>
+            <DialogTitle>Create Booking</DialogTitle>
             {selectedLead && (
               <div className="pt-3 pb-1">
                 <Badge variant="secondary" className="text-sm font-medium flex items-center gap-1.5 w-fit">
@@ -740,8 +839,8 @@ const Transactions = () => {
             {/* 1. Buyer Selection */}
             <div className="space-y-2 sm:space-y-3">
               <h3 className="text-sm font-semibold text-muted-foreground">1. Buyer</h3>
-              <div className="space-y-2">
-                <Label>Select Buyer (Lead)</Label>
+            <div className="space-y-2">
+              <Label>Select Buyer (Lead)</Label>
               <Select value={selectedLead} onValueChange={setSelectedLead}>
                 <SelectTrigger className="h-10 min-h-[44px]">
                   <SelectValue placeholder="Choose a lead..." />
@@ -792,7 +891,7 @@ const Transactions = () => {
               
               {/* Buy New Stall - Hide when lead owns stalls and is adding services only */}
             {!shouldHideStallSelector && (
-              <div className="space-y-2">
+            <div className="space-y-2">
                 <Label>Buy New Stall</Label>
                 <Select 
                   onValueChange={(v) => handleAddItem('stall', v)} 
@@ -807,23 +906,23 @@ const Transactions = () => {
                         ? "No available stalls (all sold/reserved)"
                         : "Select a stall to add..."
                     } />
-                  </SelectTrigger>
-                  <SelectContent>
+                </SelectTrigger>
+                <SelectContent>
                     {availableStallsForLead.length === 0 ? (
-                      <SelectItem value="" disabled>
+                      <SelectItem value="placeholder-none" disabled>
                         {leadOwnsStalls 
                           ? "All available stalls are already owned. Remove services to add new stalls."
                           : "No available stalls"}
                       </SelectItem>
                     ) : (
                       availableStallsForLead.map(stall => (
-                        <SelectItem key={stall.id} value={stall.id} disabled={selectedItems.some(i => i.id === stall.id)}>
+                    <SelectItem key={stall.id} value={stall.id} disabled={selectedItems.some(i => i.id === stall.id)}>
                           {stall.stall_number} - ₹{stall.base_rent.toLocaleString()}
-                        </SelectItem>
+                    </SelectItem>
                       ))
                     )}
-                  </SelectContent>
-                </Select>
+                </SelectContent>
+              </Select>
                 {availableStallsForLead.length === 0 && !leadOwnsStalls && (
                   <p className="text-xs text-muted-foreground mt-1">
                     All stalls have been sold or reserved. Sold stalls cannot be purchased again.
@@ -839,7 +938,7 @@ const Transactions = () => {
                       The stall selector is disabled because you're adding services only. The selected stall will not be charged again. 
                       Select an existing stall below to allocate services.
                     </p>
-                  </div>
+            </div>
                 )}
                 {leadOwnsStalls && !hasServicesInTransaction && (
                   <p className="text-xs text-muted-foreground">
@@ -850,14 +949,14 @@ const Transactions = () => {
               </div>
             )}
 
-              {/* Add Services */}
-              <div className="space-y-2">
+            {/* Add Services */}
+            <div className="space-y-2">
                 <Label>Add Services</Label>
-                <Select onValueChange={(v) => handleAddItem('service', v)} value="">
+              <Select onValueChange={(v) => handleAddItem('service', v)} value="">
                   <SelectTrigger className="h-10 min-h-[44px]">
-                    <SelectValue placeholder="Select a service to add..." />
-                  </SelectTrigger>
-                  <SelectContent>
+                  <SelectValue placeholder="Select a service to add..." />
+                </SelectTrigger>
+                <SelectContent>
                     {services && services.length > 0 ? (
                       services.map(service => {
                         const isSoldOut = !service.is_unlimited && service.sold_quantity >= service.quantity;
@@ -882,14 +981,14 @@ const Transactions = () => {
                                 <Badge variant="secondary" className="ml-2 text-xs">Added</Badge>
                               )}
                             </div>
-                          </SelectItem>
+                    </SelectItem>
                         );
                       })
                     ) : (
-                      <SelectItem value="" disabled>No services available</SelectItem>
+                      <SelectItem value="placeholder-no-services" disabled>No services available</SelectItem>
                     )}
-                  </SelectContent>
-                </Select>
+                </SelectContent>
+              </Select>
               </div>
             </div>
 
@@ -897,7 +996,7 @@ const Transactions = () => {
             {selectedLead && hasServicesInTransaction && !hasStallsInTransaction && (
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-muted-foreground">3. Where does it apply?</h3>
-                <div className="space-y-2">
+              <div className="space-y-2">
                   <Label>Apply Services To Stall *</Label>
                 <Select value={selectedStallForServices} onValueChange={setSelectedStallForServices}>
                   <SelectTrigger className="h-10 min-h-[44px]">
@@ -909,7 +1008,7 @@ const Transactions = () => {
                         const leadStalls = selectedLead ? getStallsByLeadId(selectedLead) : [];
                         if (!leadStalls || leadStalls.length === 0) {
                           return (
-                            <SelectItem value="" disabled>
+                            <SelectItem value="placeholder-no-stalls" disabled>
                               {leadOwnsStalls 
                                 ? "No stalls found for this buyer. Add a stall to this transaction or select a different buyer."
                                 : "This buyer doesn't own any stalls yet. Please add a stall to this transaction first."}
@@ -922,9 +1021,11 @@ const Transactions = () => {
                           </SelectItem>
                         ));
                       } catch (error) {
-                        console.error('Error getting stalls for lead:', error);
+                        if (import.meta.env.DEV) {
+                          console.error('Error getting stalls for lead:', error);
+                        }
                         return (
-                          <SelectItem value="" disabled>
+                          <SelectItem value="placeholder-error" disabled>
                             Error loading stalls
                           </SelectItem>
                         );
@@ -971,7 +1072,7 @@ const Transactions = () => {
                       <div className="flex justify-end pt-1">
                         <span className="text-xs text-muted-foreground">
                           Subtotal: <span className="font-semibold text-foreground">₹{selectedItems.filter(i => i.type === 'stall').reduce((sum, i) => sum + i.price, 0).toLocaleString()}</span>
-                        </span>
+                      </span>
                       </div>
                     </div>
                   )}
@@ -995,14 +1096,14 @@ const Transactions = () => {
                         {selectedItems.filter(i => i.type === 'service').map(item => (
                           <div key={item.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                             <span className="text-sm">{item.name}</span>
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium">₹{item.price.toLocaleString()}</span>
-                              <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="h-6 w-6 p-0 text-destructive">
-                                ×
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium">₹{item.price.toLocaleString()}</span>
+                        <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="h-6 w-6 p-0 text-destructive">
+                          ×
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                       </div>
                       <div className="flex justify-end pt-1">
                         <span className="text-xs text-muted-foreground">
@@ -1034,7 +1135,7 @@ const Transactions = () => {
               disabled={!canCreateTransaction || isSubmitting}
               className={`w-full sm:w-auto h-10 min-h-[44px] ${!canCreateTransaction ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {isSubmitting ? 'Creating...' : 'Create Transaction'}
+              {isSubmitting ? 'Creating...' : 'Create Booking'}
             </Button>
           </div>
         </DialogContent>
@@ -1135,7 +1236,16 @@ const Transactions = () => {
           </div>
           <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
             <Button variant="outline" onClick={() => setPaymentDialogOpen(false)} className="w-full sm:w-auto h-10 min-h-[44px]">Cancel</Button>
-            <Button onClick={handleAddPayment} className="w-full sm:w-auto h-10 min-h-[44px]">Record Payment</Button>
+            <Button onClick={handleAddPayment} disabled={isSubmitting} className="w-full sm:w-auto h-10 min-h-[44px]">
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Recording...
+                </>
+              ) : (
+                'Record Payment'
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -1144,29 +1254,29 @@ const Transactions = () => {
       <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancel Transaction</AlertDialogTitle>
+            <AlertDialogTitle>Cancel Booking</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to cancel this transaction? This will:
+              Are you sure you want to cancel this booking? This will:
               <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Release only the stalls purchased in <strong>this transaction</strong> (they will become available again)</li>
-                <li>Remove only the service allocations created as part of <strong>this transaction</strong></li>
-                <li>Keep the transaction visible as "Cancelled" for audit purposes</li>
+                <li>Release only the stalls purchased in <strong>this booking</strong> (they will become available again)</li>
+                <li>Remove only the service allocations created as part of <strong>this booking</strong></li>
+                <li>Keep the booking visible as "Cancelled" for audit purposes</li>
               </ul>
               <p className="mt-2 text-sm text-muted-foreground">
-                <strong>Note:</strong> This will only affect items in this specific transaction. Previous transactions and their items will remain unchanged.
+                <strong>Note:</strong> This will only affect items in this specific booking. Previous bookings and their items will remain unchanged.
               </p>
               <p className="mt-2 font-medium">This action cannot be undone.</p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep Transaction</AlertDialogCancel>
+            <AlertDialogCancel>Keep Booking</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (cancelTxnId) {
                   cancelTransaction(cancelTxnId);
                   toast({
-                    title: 'Transaction Cancelled',
-                    description: 'This transaction has been cancelled. Only items from this transaction have been released.',
+                    title: 'Booking Cancelled',
+                    description: 'This booking has been cancelled. Only items from this booking have been released.',
                   });
                   setCancelDialogOpen(false);
                   setCancelTxnId('');

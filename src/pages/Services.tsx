@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
-import { useMockData } from '@/contexts/MockDataContext';
+import { useMockData } from '@/contexts/SupabaseDataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,29 +58,42 @@ const Services = () => {
     setEditingService(null); 
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+    
     if (!formData.name) { 
       toast({ title: 'Error', description: 'Service name is required', variant: 'destructive' }); 
       return; 
     }
-
+    
     if (!editingService) {
       toast({ title: 'Error', description: 'Services can only be added through transactions', variant: 'destructive' });
       return;
     }
 
-    updateService(editingService.id, {
-      name: formData.name,
-      category: formData.category,
-      description: formData.description,
-      price: formData.price,
-      quantity: formData.quantity,
-      is_unlimited: formData.is_unlimited,
-      notes: formData.notes
-    }); 
-    toast({ title: 'Success', description: 'Service updated' }); 
+    setIsSubmitting(true);
+    try {
+      await updateService(editingService.id, {
+        name: formData.name,
+        category: formData.category,
+        description: formData.description,
+        price: formData.price,
+        quantity: formData.quantity,
+        is_unlimited: formData.is_unlimited,
+        notes: formData.notes
+      }); 
+      toast({ title: 'Success', description: 'Service updated' }); 
     setDialogOpen(false); 
     resetForm();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to update service. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleEdit = (service: Service) => { 
@@ -103,7 +116,9 @@ const Services = () => {
     if (!allocation) return null;
     const stall = stalls.find(s => s.id === allocation.stall_id);
     if (!stall) return null;
-    const lead = stall.lead_id ? getLeadById(stall.lead_id) : null;
+    // Get lead from transaction (stall.lead_id was removed, lead comes from transaction)
+    const transaction = transactions.find(t => t.id === allocation.transaction_id);
+    const lead = transaction ? getLeadById(transaction.lead_id) : null;
     return { stall, lead, quantity: allocation.quantity };
   };
 
@@ -204,7 +219,7 @@ const Services = () => {
                         type="number" 
                         value={formData.quantity} 
                         onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })} 
-                        disabled={formData.is_unlimited}
+                        disabled={formData.is_unlimited} 
                         className="h-10 min-h-[44px] text-base"
                       />
                     </div>
@@ -234,7 +249,16 @@ const Services = () => {
                 {editingService && (
                 <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
                   <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }} className="w-full sm:w-auto h-10 min-h-[44px]">Cancel</Button>
-                  <Button onClick={handleSubmit} className="w-full sm:w-auto h-10 min-h-[44px]">Update Service</Button>
+                  <Button onClick={handleSubmit} disabled={isSubmitting} className="w-full sm:w-auto h-10 min-h-[44px]">
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      'Update Service'
+                    )}
+                  </Button>
                 </div>
                 )}
               </DialogContent>
@@ -245,7 +269,7 @@ const Services = () => {
         <Card>
           <CardContent className="p-0 overflow-x-auto">
             <div className="min-w-full">
-              <Table>
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>

@@ -1,4 +1,4 @@
-import { useMockData } from '@/contexts/MockDataContext';
+import { useMockData } from '@/contexts/SupabaseDataContext';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';

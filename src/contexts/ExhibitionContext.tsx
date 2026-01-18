@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface Exhibition {
   id: string;
@@ -9,38 +11,11 @@ export interface Exhibition {
   endDate: string;
 }
 
-// Define available exhibitions
-export const EXHIBITIONS: Exhibition[] = [
-  {
-    id: 'kings-crown-business',
-    name: 'Business - Kings Crown',
-    shortName: 'KC Business',
-    description: 'Premier business exhibition showcasing industry leaders',
-    startDate: '2024-03-15',
-    endDate: '2024-03-18',
-  },
-  {
-    id: 'kings-crown-education',
-    name: 'Education - Kings Crown',
-    shortName: 'KC Education',
-    description: 'Educational institutions and career opportunities fair',
-    startDate: '2024-04-10',
-    endDate: '2024-04-12',
-  },
-  {
-    id: 'charminar-business',
-    name: 'Education - Old City',
-    shortName: 'Old City Education',
-    description: 'Traditional and modern business showcase at Charminar',
-    startDate: '2024-05-20',
-    endDate: '2024-05-23',
-  },
-];
-
 interface ExhibitionContextType {
-  currentExhibition: Exhibition;
+  currentExhibition: Exhibition | null;
   setCurrentExhibition: (exhibition: Exhibition) => void;
   exhibitions: Exhibition[];
+  isLoading: boolean;
 }
 
 const STORAGE_KEY = 'hydexpo_current_exhibition';
@@ -48,15 +23,51 @@ const STORAGE_KEY = 'hydexpo_current_exhibition';
 const ExhibitionContext = createContext<ExhibitionContextType | undefined>(undefined);
 
 export const ExhibitionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Fetch exhibitions from Supabase
+  const { data: exhibitionsData = [], isLoading } = useQuery({
+    queryKey: ['exhibitions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('exhibitions')
+        .select('*')
+        .order('start_date');
+      if (error) throw error;
+      // Transform database format to Exhibition interface
+      return data.map((ex: any) => ({
+        id: ex.id,
+        name: ex.name,
+        shortName: ex.short_name,
+        description: ex.description,
+        startDate: ex.start_date,
+        endDate: ex.end_date,
+      })) as Exhibition[];
+    },
+  });
+
   // Initialize from localStorage or default to first exhibition
-  const [currentExhibition, setCurrentExhibitionState] = useState<Exhibition>(() => {
+  const [currentExhibition, setCurrentExhibitionState] = useState<Exhibition | null>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const found = EXHIBITIONS.find(e => e.id === stored);
+    if (stored && exhibitionsData.length > 0) {
+      const found = exhibitionsData.find(e => e.id === stored);
       if (found) return found;
     }
-    return EXHIBITIONS[0];
+    return exhibitionsData.length > 0 ? exhibitionsData[0] : null;
   });
+
+  // Update current exhibition when exhibitions are loaded
+  useEffect(() => {
+    if (exhibitionsData.length > 0 && !currentExhibition) {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const found = exhibitionsData.find(e => e.id === stored);
+        if (found) {
+          setCurrentExhibitionState(found);
+          return;
+        }
+      }
+      setCurrentExhibitionState(exhibitionsData[0]);
+    }
+  }, [exhibitionsData, currentExhibition]);
 
   // Persist to localStorage when exhibition changes
   const setCurrentExhibition = (exhibition: Exhibition) => {
@@ -67,20 +78,21 @@ export const ExhibitionProvider: React.FC<{ children: ReactNode }> = ({ children
   // Sync with localStorage on mount (in case of external changes)
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue) {
-        const found = EXHIBITIONS.find(ex => ex.id === e.newValue);
+      if (e.key === STORAGE_KEY && e.newValue && exhibitionsData.length > 0) {
+        const found = exhibitionsData.find(ex => ex.id === e.newValue);
         if (found) setCurrentExhibitionState(found);
       }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [exhibitionsData]);
 
   return (
     <ExhibitionContext.Provider value={{ 
       currentExhibition, 
       setCurrentExhibition,
-      exhibitions: EXHIBITIONS 
+      exhibitions: exhibitionsData,
+      isLoading
     }}>
       {children}
     </ExhibitionContext.Provider>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stall, Lead, Transaction } from '@/types/database';
-import { useMockData } from '@/contexts/MockDataContext';
+import { useMockData } from '@/contexts/SupabaseDataContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -58,23 +58,35 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
   if (!stall) return null;
 
   // Get all transactions for this stall
-  const stallTransactions = getTransactionsByStallId(stall.id);
+  const stallTransactions = stall?.id ? getTransactionsByStallId(stall.id) : [];
   
   // Get lead from first transaction or prop
-  const firstTxn = stallTransactions[0];
-  const stallLead = firstTxn ? getLeadById(firstTxn.lead_id) : lead;
+  const firstTxn = stallTransactions && stallTransactions.length > 0 ? stallTransactions[0] : null;
+  const stallLead = firstTxn && firstTxn.lead_id ? getLeadById(firstTxn.lead_id) : lead;
   
   // Get all services for this stall with their allocations
-  const serviceAllocations = getServiceAllocationsByStallId(stall.id);
-  const stallServices = serviceAllocations.map(alloc => {
-    const service = getServiceById(alloc.service_id);
-    return service ? { ...service, allocation: alloc } : null;
-  }).filter(Boolean);
+  const serviceAllocations = stall?.id ? getServiceAllocationsByStallId(stall.id) : [];
+  const stallServices = serviceAllocations
+    .filter(alloc => alloc && alloc.service_id)
+    .map(alloc => {
+      const service = getServiceById(alloc.service_id);
+      return service ? { ...service, allocation: alloc } : null;
+    })
+    .filter(Boolean);
   
   // Get all payments across all transactions, sorted by date
-  const allPayments = stallTransactions.flatMap(txn => 
-    getPaymentsByTransactionId(txn.id).map(p => ({ ...p, transaction: txn }))
-  ).sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime());
+  const allPayments = (stallTransactions || [])
+    .filter(txn => txn && txn.id)
+    .flatMap(txn => {
+      const payments = getPaymentsByTransactionId(txn.id);
+      return payments.map(p => ({ ...p, transaction: txn }));
+    })
+    .filter(p => p && p.payment_date)
+    .sort((a, b) => {
+      const dateA = new Date(a.payment_date).getTime();
+      const dateB = new Date(b.payment_date).getTime();
+      return dateB - dateA;
+    });
 
   const handleSave = () => {
     const updates: Partial<Stall> = { notes };
@@ -293,7 +305,7 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
           {/* Status Display (Read-only) */}
           <div className="space-y-3">
             <Label>Status</Label>
-            <p className="text-sm text-muted-foreground">{statusLabels[stall.status]}</p>
+              <p className="text-sm text-muted-foreground">{statusLabels[stall.status]}</p>
             <p className="text-xs text-muted-foreground italic">
               Status is automatically derived from transactions and payments.
             </p>

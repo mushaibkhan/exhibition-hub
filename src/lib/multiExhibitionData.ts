@@ -526,7 +526,8 @@ export const EXHIBITION_DATASETS: Record<string, ExhibitionDataset> = {
 };
 
 // Debug logging to verify datasets are different
-console.log('[ExhibitionData] Dataset stats:', {
+if (import.meta.env.DEV) {
+  console.log('[ExhibitionData] Dataset stats:', {
   'kings-crown-business': {
     stalls: EXHIBITION_DATASETS['kings-crown-business'].stalls.length,
     leads: EXHIBITION_DATASETS['kings-crown-business'].leads.length,
@@ -542,4 +543,5 @@ console.log('[ExhibitionData] Dataset stats:', {
     leads: EXHIBITION_DATASETS['charminar-business'].leads.length,
     transactions: EXHIBITION_DATASETS['charminar-business'].transactions.length,
   },
-});
+  });
+}

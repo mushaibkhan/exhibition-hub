@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { Stall, StallStatus } from '@/types/database';
-import { useMockData } from '@/contexts/MockDataContext';
+import { useMockData } from '@/contexts/SupabaseDataContext';
 import {
   Tooltip,
   TooltipContent,
@@ -39,10 +39,11 @@ export const StallBox = ({ stall, assignedTo, amountPaid, totalAmount, hasServic
 
   // Explicit grid positioning - CSS Grid uses 1-based indexing
   // position_x and position_y are 0-based, so add 1 for grid-row-start and grid-column-start
-  const gridColumnStart = stall.position_x + 1;
-  const gridColumnEnd = gridColumnStart + stall.width;
-  const gridRowStart = stall.position_y + 1;
-  const gridRowEnd = gridRowStart + stall.height;
+  // Handle optional position fields (from layout table)
+  const gridColumnStart = (stall.position_x ?? 0) + 1;
+  const gridColumnEnd = gridColumnStart + (stall.width ?? 1);
+  const gridRowStart = (stall.position_y ?? 0) + 1;
+  const gridRowEnd = gridRowStart + (stall.height ?? 1);
 
   // Determine border style for pending payment - use orange/amber color
   const borderStyle = hasPendingPayment 
@@ -77,7 +78,7 @@ export const StallBox = ({ stall, assignedTo, amountPaid, totalAmount, hasServic
             </div>
           )}
           <span className="text-sm sm:text-lg font-bold">{stall.stall_number}</span>
-          <span className="text-[10px] sm:text-xs opacity-70">{stall.size}</span>
+          <span className="text-[10px] sm:text-xs opacity-70">3×2</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="right" className="max-w-xs">
@@ -96,7 +97,7 @@ export const StallBox = ({ stall, assignedTo, amountPaid, totalAmount, hasServic
             </span>
           </div>
           <div className="text-sm">
-            <p><span className="text-muted-foreground">Size:</span> {stall.size}</p>
+            <p><span className="text-muted-foreground">Size:</span> 3×2</p>
             <p><span className="text-muted-foreground">Zone:</span> {stall.zone || 'N/A'}</p>
             {assignedTo && (
               <p><span className="text-muted-foreground">Buyer:</span> {assignedTo}</p>

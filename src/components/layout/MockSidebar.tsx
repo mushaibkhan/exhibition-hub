@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { useMockData } from '@/contexts/MockDataContext';
+import { useMockData } from '@/contexts/SupabaseDataContext';
 import { ExhibitionSelector } from './ExhibitionSelector';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import {
   CreditCard,
   Building2,
   UserCog,
+  Settings,
+  DollarSign,
 } from 'lucide-react';
 
 interface NavItem {
@@ -28,12 +30,14 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: BarChart3, adminOnly: true },
   { label: 'Floor Layout', path: '/', icon: LayoutGrid },
   { label: 'Leads', path: '/leads', icon: Users, section: 'Operations' },
-  { label: 'Transactions', path: '/transactions', icon: Receipt, section: 'Operations' },
-  { label: 'Payments', path: '/payments', icon: CreditCard, adminOnly: true, section: 'Operations' },
+  { label: 'Bookings', path: '/transactions', icon: Receipt, section: 'Operations' },
+  { label: 'Payments', path: '/payments', icon: CreditCard, section: 'Operations' },
+  { label: 'Expenses', path: '/expenses', icon: DollarSign, adminOnly: true, section: 'Operations' },
   { label: 'Stalls', path: '/stalls', icon: Square, section: 'Reference' },
   { label: 'Services', path: '/services', icon: Package, section: 'Reference' },
   { label: 'Accounts', path: '/accounts', icon: Building2, adminOnly: true, section: 'Admin' },
   { label: 'Users', path: '/users', icon: UserCog, adminOnly: true, section: 'Admin' },
+  { label: 'Settings', path: '/settings', icon: Settings, adminOnly: true, section: 'Admin' },
 ];
 
 interface MockSidebarProps {

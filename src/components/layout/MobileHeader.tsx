@@ -33,9 +33,11 @@ export const MobileHeader = ({ title, subtitle, sidebarOpen, onToggleSidebar }: 
           {subtitle && <p className="text-xs md:text-sm text-muted-foreground truncate hidden sm:block">{subtitle}</p>}
         </div>
         
-        <Badge variant="outline" className="hidden sm:flex shrink-0 text-xs">
-          {currentExhibition.shortName}
-        </Badge>
+        {currentExhibition && (
+          <Badge variant="outline" className="hidden sm:flex shrink-0 text-xs">
+            {currentExhibition.shortName}
+          </Badge>
+        )}
       </div>
       
       <div className="shrink-0 ml-2">

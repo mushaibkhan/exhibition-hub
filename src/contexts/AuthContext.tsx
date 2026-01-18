@@ -64,14 +64,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const mockUser = MOCK_USERS[normalizedEmail];
     
     // Debug: log the login attempt
-    console.log('Login attempt:', {
-      originalEmail: email,
-      normalizedEmail,
-      passwordLength: password.length,
-      userExists: !!mockUser,
-      expectedPassword: mockUser?.password,
-      passwordMatch: mockUser?.password === password
-    });
+    if (import.meta.env.DEV) {
+      console.log('Login attempt:', {
+        originalEmail: email,
+        normalizedEmail,
+        passwordLength: password.length,
+        userExists: !!mockUser,
+        expectedPassword: mockUser?.password,
+        passwordMatch: mockUser?.password === password
+      });
+    }
     
     // Check if user exists and password matches
     if (mockUser && mockUser.password === password) {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
-import { useMockData } from '@/contexts/MockDataContext';
+import { useMockData } from '@/contexts/SupabaseDataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,7 +52,7 @@ const Leads = () => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (isSubmitting) return;
     
     // Validate required fields
@@ -107,14 +107,20 @@ const Leads = () => {
     setIsSubmitting(true);
     try {
       if (editingLead) { 
-        updateLead(editingLead.id, formData); 
+        await updateLead(editingLead.id, formData); 
         toast({ title: 'Success', description: `Lead "${formData.name}" updated successfully` }); 
       } else { 
-        addLead({ ...formData, created_by: null }); 
+        await addLead({ ...formData, created_by: null }); 
         toast({ title: 'Success', description: `Lead "${formData.name}" added successfully` }); 
       }
       setDialogOpen(false); 
       resetForm();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to save lead. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -291,7 +297,16 @@ const Leads = () => {
               </div>
               <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end pt-2 border-t">
                 <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }} className="w-full sm:w-auto h-10 min-h-[44px]">Cancel</Button>
-                <Button onClick={handleSubmit} disabled={isSubmitting} className="w-full sm:w-auto h-10 min-h-[44px]">{isSubmitting ? 'Saving...' : (editingLead ? 'Update' : 'Add')} Lead</Button>
+                <Button onClick={handleSubmit} disabled={isSubmitting} className="w-full sm:w-auto h-10 min-h-[44px]">
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {editingLead ? 'Updating...' : 'Creating...'}
+                    </>
+                  ) : (
+                    editingLead ? 'Update Lead' : 'Add Lead'
+                  )}
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -342,7 +357,7 @@ const Leads = () => {
                     </Button>
                   )}
                 </TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="ghost" size="icon" onClick={() => handleEdit(lead)}><Edit className="h-4 w-4" /></Button>{isAdmin && <Button variant="ghost" size="icon" onClick={() => { deleteLead(lead.id); toast({ title: 'Deleted' }); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div></TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="ghost" size="icon" onClick={() => handleEdit(lead)}><Edit className="h-4 w-4" /></Button>{isAdmin && <Button variant="ghost" size="icon" onClick={async () => { try { await deleteLead(lead.id); toast({ title: 'Success', description: 'Lead deleted successfully' }); } catch (error: any) { toast({ title: 'Error', description: error?.message || 'Failed to delete lead. Please try again.', variant: 'destructive' }); } }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div></TableCell>
               </TableRow>
             );
           })}

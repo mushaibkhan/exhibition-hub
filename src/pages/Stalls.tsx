@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
-import { useMockData } from '@/contexts/MockDataContext';
+import { useMockData } from '@/contexts/SupabaseDataContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -46,21 +46,27 @@ const Stalls = () => {
 
   // Get transaction info for a stall
   const getStallTransactionInfo = (stallId: string) => {
-    const txnItem = transactionItems.find(ti => ti.stall_id === stallId);
-    if (!txnItem) return null;
-    const txn = transactions.find(t => t.id === txnItem.transaction_id);
-    if (!txn) return null;
+    if (!stallId || !transactionItems || !transactions) return null;
+    const txnItem = transactionItems.find(ti => ti && ti.stall_id === stallId);
+    if (!txnItem || !txnItem.transaction_id) return null;
+    const txn = transactions.find(t => t && t.id === txnItem.transaction_id);
+    if (!txn || !txn.lead_id) return null;
     const lead = getLeadById(txn.lead_id);
     const payments = getPaymentsByTransactionId(txn.id);
-    return { transaction: txn, lead, item: txnItem, payments };
+    return { transaction: txn, lead, item: txnItem, payments: payments || [] };
   };
 
   const getServicesForStall = (stallId: string) => {
+    if (!stallId || !services) return [];
     const allocations = getServiceAllocationsByStallId(stallId);
-    return allocations.map(a => {
-      const service = services.find(s => s.id === a.service_id);
-      return service ? { ...service, quantity: a.quantity } : null;
-    }).filter(Boolean);
+    if (!allocations || allocations.length === 0) return [];
+    return allocations
+      .filter(a => a && a.service_id)
+      .map(a => {
+        const service = services.find(s => s && s.id === a.service_id);
+        return service ? { ...service, quantity: a.quantity || 1 } : null;
+      })
+      .filter(Boolean);
   };
 
   const handleViewStall = (stall: Stall) => {
@@ -108,7 +114,7 @@ const Stalls = () => {
         <Card>
           <CardContent className="p-0 overflow-x-auto">
             <div className="min-w-full">
-              <Table>
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Stall No.</TableHead>
@@ -198,7 +204,7 @@ const Stalls = () => {
         <p className="text-sm text-muted-foreground text-center">
           💡 Stalls are allocated through Transactions. Create a transaction to assign a stall to a buyer.
         </p>
-        </div>
+      </div>
 
       {/* View Stall Details Dialog */}
       <Dialog open={!!viewingStall} onOpenChange={(o) => !o && setViewingStall(null)}>

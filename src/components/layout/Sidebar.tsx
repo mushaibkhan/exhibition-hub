@@ -11,7 +11,9 @@ import {
   CreditCard,
   Building2,
   UserCog,
-  LogOut
+  Settings,
+  LogOut,
+  DollarSign,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -31,8 +33,9 @@ const navItems: NavItem[] = [
   
   // Operations section
   { label: 'Leads', path: '/leads', icon: Users, section: 'Operations' },
-  { label: 'Transactions', path: '/transactions', icon: Receipt, section: 'Operations' },
-  { label: 'Payments', path: '/payments', icon: CreditCard, adminOnly: true, section: 'Operations' },
+  { label: 'Bookings', path: '/transactions', icon: Receipt, section: 'Operations' },
+  { label: 'Payments', path: '/payments', icon: CreditCard, section: 'Operations' },
+  { label: 'Expenses', path: '/expenses', icon: DollarSign, adminOnly: true, section: 'Operations' },
   
   // Reference section
   { label: 'Stalls', path: '/stalls', icon: Square, section: 'Reference' },
@@ -41,6 +44,7 @@ const navItems: NavItem[] = [
   // Admin section
   { label: 'Accounts', path: '/accounts', icon: Building2, adminOnly: true, section: 'Admin' },
   { label: 'Users', path: '/users', icon: UserCog, adminOnly: true, section: 'Admin' },
+  { label: 'Settings', path: '/settings', icon: Settings, adminOnly: true, section: 'Admin' },
 ];
 
 export const Sidebar = () => {

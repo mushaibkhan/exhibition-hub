@@ -9,7 +9,18 @@ import {
 } from '@/components/ui/select';
 
 export const ExhibitionSelector = () => {
-  const { currentExhibition, setCurrentExhibition, exhibitions } = useExhibition();
+  const { currentExhibition, setCurrentExhibition, exhibitions, isLoading } = useExhibition();
+
+  if (isLoading || !currentExhibition) {
+    return (
+      <div className="px-3 py-3 border-b border-sidebar-border">
+        <div className="text-xs font-medium text-sidebar-foreground/60 mb-2 px-1">
+          Current Exhibition
+        </div>
+        <div className="text-sm text-sidebar-foreground/60">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="px-3 py-3 border-b border-sidebar-border">

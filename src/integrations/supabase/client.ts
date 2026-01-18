@@ -13,5 +13,18 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
+  db: {
+    schema: 'public',
+  },
+  global: {
+    headers: {},
+  },
 });
+
+// Helper to set exhibition context for RLS (if using session variables)
+export const setExhibitionContext = async (exhibitionId: string) => {
+  // Note: For production, you would use Supabase's session variables
+  // For now, we filter client-side
+  // await supabase.rpc('set_exhibition_context', { exhibition_id: exhibitionId });
+};

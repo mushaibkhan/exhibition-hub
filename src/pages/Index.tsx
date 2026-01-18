@@ -4,7 +4,7 @@ import { MockAppLayout } from '@/components/layout/MockAppLayout';
 import { StallBox } from '@/components/floor/StallBox';
 import { FloorLegend } from '@/components/floor/FloorLegend';
 import { StallDrawer } from '@/components/floor/StallDrawer';
-import { useMockData } from '@/contexts/MockDataContext';
+import { useMockData } from '@/contexts/SupabaseDataContext';
 import { Stall } from '@/types/database';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -31,40 +31,49 @@ const Index = () => {
     setDrawerOpen(true);
   };
 
-  const floor1Stalls = stalls.filter(s => s.zone === 'Floor 1');
-  const floor2Stalls = stalls.filter(s => s.zone === 'Floor 2');
+  const floor1Stalls = stalls?.filter(s => s && s.zone === 'Floor 1') || [];
+  const floor2Stalls = stalls?.filter(s => s && s.zone === 'Floor 2') || [];
 
   const getStallInfo = (stall: Stall) => {
+    if (!stall || !stall.id) {
+      return { hasServices: false, hasPendingPayment: false, serviceCount: 0 };
+    }
     const stallTransactions = getTransactionsByStallId(stall.id);
     const services = getServiceAllocationsByStallId(stall.id);
-    const hasServices = services.length > 0;
-    const serviceCount = services.length;
+    const hasServices = services && services.length > 0;
+    const serviceCount = services ? services.length : 0;
     
     // Check for pending payments across all transactions for this stall
-    const hasPendingPayment = stallTransactions.some(txn => txn.payment_status !== 'paid');
+    const hasPendingPayment = stallTransactions && stallTransactions.some(txn => txn && txn.payment_status !== 'paid');
     
-    if (stall.lead_id) {
-      const lead = getLeadById(stall.lead_id);
-      // Use the first transaction for legacy compatibility (or sum all)
+    // Get lead from first transaction (stall.lead_id was removed, lead comes from transaction)
+    if (stallTransactions && stallTransactions.length > 0) {
       const firstTxn = stallTransactions[0];
-      return { 
-        assignedTo: lead?.name, 
-        amountPaid: firstTxn?.amount_paid || 0, 
-        totalAmount: firstTxn?.total_amount || 0,
-        hasServices,
-        hasPendingPayment,
-        serviceCount
-      };
+      if (firstTxn && firstTxn.lead_id) {
+        const lead = getLeadById(firstTxn.lead_id);
+        return { 
+          assignedTo: lead?.name || null, 
+          amountPaid: firstTxn.amount_paid || 0, 
+          totalAmount: firstTxn.total_amount || 0,
+          hasServices,
+          hasPendingPayment,
+          serviceCount
+        };
+      }
     }
     return { hasServices, hasPendingPayment: false, serviceCount };
   };
 
   const renderFloorGrid = (floorStalls: Stall[], cols: number, rows: number) => {
+    if (!floorStalls || floorStalls.length === 0) return null;
     // Sort stalls by position to ensure consistent rendering order
-    const sortedStalls = [...floorStalls].sort((a, b) => {
-      if (a.position_y !== b.position_y) return a.position_y - b.position_y;
-      return a.position_x - b.position_x;
-    });
+    const sortedStalls = [...floorStalls]
+      .filter(stall => stall && stall.id && (stall.position_x !== undefined && stall.position_y !== undefined))
+      .sort((a, b) => {
+        const posY = (a.position_y ?? 0) - (b.position_y ?? 0);
+        if (posY !== 0) return posY;
+        return (a.position_x ?? 0) - (b.position_x ?? 0);
+      });
 
     return (
       <div 
@@ -80,7 +89,7 @@ const Index = () => {
           }}
         >
           {sortedStalls.map((stall) => {
-            const info = getStallInfo(stall);
+        const info = getStallInfo(stall);
             return <StallBox 
               key={stall.id} 
               stall={stall} 
@@ -92,10 +101,10 @@ const Index = () => {
               serviceCount={info.serviceCount}
               onClick={() => handleStallClick(stall)} 
             />;
-          })}
+      })}
         </div>
-      </div>
-    );
+    </div>
+  );
   };
 
   return (
