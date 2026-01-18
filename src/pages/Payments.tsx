@@ -113,6 +113,7 @@ const Payments = () => {
           'Payment Date': formatDateForExport(p.payment_date),
           'Booking Number': txn?.transaction_number || '',
           'Buyer Name': lead?.name || '',
+          'Company': lead?.company || '',
           'Amount': formatCurrencyForExport(p.amount),
           'Payment Mode': p.payment_mode.toUpperCase(),
           'Reference ID': p.reference_id || '',
@@ -152,7 +153,7 @@ const Payments = () => {
           <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm">UPI</CardTitle><Smartphone className="h-4 w-4 text-purple-600" /></CardHeader><CardContent><div className="text-2xl font-bold">₹{stats.upi.toLocaleString()}</div></CardContent></Card>
           <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm">Bank</CardTitle><CreditCard className="h-4 w-4 text-blue-600" /></CardHeader><CardContent><div className="text-2xl font-bold">₹{stats.bank.toLocaleString()}</div></CardContent></Card>
         </div>
-        <Card><CardContent className="p-0 overflow-x-auto"><div className="min-w-full"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Transaction</TableHead><TableHead>Buyer</TableHead><TableHead>Amount</TableHead><TableHead>Mode</TableHead><TableHead>Reference</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
+        <Card><CardContent className="p-0 overflow-x-auto"><div className="min-w-full"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Transaction</TableHead><TableHead>Buyer</TableHead><TableHead>Company</TableHead><TableHead>Amount</TableHead><TableHead>Mode</TableHead><TableHead>Reference</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
           {payments.map((p) => { 
             const txn = transactions.find(t => t.id === p.transaction_id); 
             const lead = txn ? getLeadById(txn.lead_id) : null; 
@@ -172,6 +173,7 @@ const Payments = () => {
                 >
                   {lead?.name}
                 </TableCell>
+                <TableCell className="text-muted-foreground">{lead?.company || '-'}</TableCell>
                 <TableCell className="font-semibold">₹{p.amount.toLocaleString()}</TableCell>
                 <TableCell><Badge className={modeColors[p.payment_mode]}><Icon className="mr-1 h-3 w-3" />{p.payment_mode.toUpperCase()}</Badge></TableCell>
                 <TableCell className="text-muted-foreground">{p.reference_id || '-'}</TableCell>
@@ -195,7 +197,7 @@ const Payments = () => {
           })}
           {payments.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="h-64 text-center">
+              <TableCell colSpan={8} className="h-64 text-center">
                 <div className="flex flex-col items-center justify-center space-y-3 py-8">
                   <CreditCard className="h-12 w-12 text-muted-foreground/50" />
                   <div className="space-y-1">
