@@ -1,11 +1,11 @@
 import { Navigate } from 'react-router-dom';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useMockData } from '@/contexts/SupabaseDataContext';
-import { Users, Square, Receipt, CreditCard, TrendingUp } from 'lucide-react';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
+import { Users, Square, Receipt, CreditCard, TrendingUp, AlertTriangle } from 'lucide-react';
 
 const Dashboard = () => {
-  const { isAdmin, stalls, leads, transactions, payments, expenses } = useMockData();
+  const { isAdmin, stalls, leads, transactions, payments, expenses, services } = useSupabaseData();
 
   if (!isAdmin) {
     return <Navigate to="/" replace />;
@@ -37,6 +37,15 @@ const Dashboard = () => {
   const totalLeads = leads?.length || 0;
   const convertedLeads = leads?.filter(l => l && l.status === 'converted').length || 0;
   const conversionRate = totalLeads > 0 ? ((convertedLeads / totalLeads) * 100).toFixed(1) : '0';
+
+  // Stock alerts for services
+  const lowStockServices = services?.filter(s => 
+    s && !s.is_unlimited && (s.quantity - s.sold_quantity) > 0 && (s.quantity - s.sold_quantity) <= 2
+  ) || [];
+  const outOfStockServices = services?.filter(s => 
+    s && !s.is_unlimited && s.sold_quantity >= s.quantity
+  ) || [];
+  const stockAlertCount = lowStockServices.length + outOfStockServices.length;
 
   return (
     <MockAppLayout title="Dashboard" subtitle="Overview and analytics (Admin Only)">
@@ -95,6 +104,35 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Stock Alert Banner */}
+        {stockAlertCount > 0 && (
+          <Card className="border-amber-500 bg-amber-50 dark:bg-amber-900/20">
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                <div>
+                  <p className="font-medium text-amber-800 dark:text-amber-200">
+                    Stock Alert: {stockAlertCount} service{stockAlertCount !== 1 ? 's' : ''} need attention
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    {outOfStockServices.length > 0 && (
+                      <span className="text-red-600 dark:text-red-400">
+                        {outOfStockServices.length} out of stock
+                      </span>
+                    )}
+                    {outOfStockServices.length > 0 && lowStockServices.length > 0 && ' • '}
+                    {lowStockServices.length > 0 && (
+                      <span className="text-amber-600 dark:text-amber-400">
+                        {lowStockServices.length} low stock (≤2 remaining)
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stall Status Breakdown */}
         <Card>

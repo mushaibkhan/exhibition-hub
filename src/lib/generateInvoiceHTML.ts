@@ -4,6 +4,8 @@ import { COMPANY_CONFIG } from './invoiceConfig';
 /**
  * Generate professional GST-compliant invoice HTML
  * Returns HTML string ready for PDF conversion
+ * If isGst is true, generates "TAX INVOICE" with GST breakdown
+ * If isGst is false, generates "BILL OF SUPPLY" without GST
  */
 export function generateInvoiceHTML(invoiceData: InvoiceData): string {
   const {
@@ -22,6 +24,7 @@ export function generateInvoiceHTML(invoiceData: InvoiceData): string {
     quantity,
     rate,
     amount,
+    isGst,
     cgst,
     sgst,
     igst,
@@ -30,15 +33,20 @@ export function generateInvoiceHTML(invoiceData: InvoiceData): string {
     bankDetails,
     footerText,
     taxType,
+    discountAmount,
   } = invoiceData;
+
+  // Determine document title based on GST flag
+  const documentTitle = isGst ? 'TAX INVOICE' : 'BILL OF SUPPLY';
+  const pageTitle = isGst ? `Tax Invoice - ${invoiceNumber}` : `Bill of Supply - ${invoiceNumber}`;
 
   // Format currency (INR with 2 decimal places)
   const formatCurrency = (value: number): string => {
     return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // Determine tax display
-  const taxRows = taxType === 'igst' 
+  // Determine tax display - only show if GST is applied
+  const taxRows = !isGst ? '' : (taxType === 'igst' 
     ? `<tr>
          <td colspan="4" style="text-align: right; padding: 8px; border-top: 1px solid #ddd; font-weight: 600;">Add: IGST @ 18%:</td>
          <td style="text-align: right; padding: 8px; border-top: 1px solid #ddd; font-weight: 600;">${formatCurrency(igst)}</td>
@@ -50,14 +58,22 @@ export function generateInvoiceHTML(invoiceData: InvoiceData): string {
        <tr>
          <td colspan="4" style="text-align: right; padding: 8px; font-weight: 600;">Add: SGST @ 9%:</td>
          <td style="text-align: right; padding: 8px; font-weight: 600;">${formatCurrency(sgst)}</td>
-       </tr>`;
+       </tr>`);
+
+  // Discount row (if applicable)
+  const discountRow = (discountAmount && discountAmount > 0) 
+    ? `<tr>
+         <td colspan="4" style="text-align: right; padding: 8px; font-weight: 600; color: #16a34a;">Less: Discount:</td>
+         <td style="text-align: right; padding: 8px; font-weight: 600; color: #16a34a;">-${formatCurrency(discountAmount)}</td>
+       </tr>`
+    : '';
 
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tax Invoice - ${invoiceNumber}</title>
+  <title>${pageTitle}</title>
   <style>
     * {
       margin: 0;
@@ -95,7 +111,7 @@ export function generateInvoiceHTML(invoiceData: InvoiceData): string {
     .invoice-header h1 {
       font-size: 24px;
       font-weight: bold;
-      color: #d32f2f;
+      color: ${isGst ? '#d32f2f' : '#1e40af'};
       margin-bottom: 10px;
       text-transform: uppercase;
     }
@@ -283,7 +299,7 @@ export function generateInvoiceHTML(invoiceData: InvoiceData): string {
   <div class="invoice-container">
     <!-- Header -->
     <div class="invoice-header">
-      <h1>TAX INVOICE</h1>
+      <h1>${documentTitle}</h1>
     </div>
     
     <!-- Invoice Number and Date -->
@@ -348,9 +364,10 @@ export function generateInvoiceHTML(invoiceData: InvoiceData): string {
           <td>Total:</td>
           <td>${formatCurrency(amount)}</td>
         </tr>
+        ${discountRow}
         ${taxRows}
         <tr class="grand-total-row">
-          <td>Grand Total:</td>
+          <td>${isGst ? 'Grand Total (incl. GST):' : 'Grand Total:'}</td>
           <td>${formatCurrency(grandTotal)}</td>
         </tr>
       </table>

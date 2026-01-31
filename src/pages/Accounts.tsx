@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
-import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 const Accounts = () => {
-  const { isAdmin, accounts, addAccount, updateAccount, deleteAccount } = useMockData();
+  const { isAdmin, accounts, addAccount, updateAccount, deleteAccount } = useSupabaseData();
   const { toast } = useToast();
   
   // Safety check

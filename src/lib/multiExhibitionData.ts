@@ -441,18 +441,32 @@ const generateTransactionsAndPayments = (
       id: txnId,
       transaction_number: txnNumber,
       lead_id: lead.id,
+      // GST fields (default to no GST for mock data)
+      is_gst: false,
+      subtotal: stall.base_rent,
+      cgst_amount: 0,
+      sgst_amount: 0,
+      gst_amount: 0,
       total_amount: stall.base_rent,
+      // Discount fields
+      discount_type: null,
+      discount_value: null,
+      discount_amount: 0,
       amount_paid: amountPaid,
       payment_status: paymentStatus,
       notes: null,
       created_by: null,
+      cancelled: false,
+      cancelled_at: null,
       created_at: new Date(2024, 0, 10 + (idx % 20)).toISOString(),
       updated_at: new Date(2024, 0, 15 + (idx % 15)).toISOString(),
+      exhibition_id: exhibitionId,
     });
 
     // Create transaction item
     transactionItems.push({
       id: genId(exhibitionId, 'item', idx + 1),
+      exhibition_id: exhibitionId,
       transaction_id: txnId,
       item_type: 'stall',
       item_name: `Stall ${stall.stall_number}`,

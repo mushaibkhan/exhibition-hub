@@ -48,14 +48,15 @@ export const MockAppLayout = ({ children, title, subtitle }: MockAppLayoutProps)
       {/* Mobile sidebar overlay */}
       {isMobile && sidebarOpen && (
         <div 
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden android-overlay-fix"
           onClick={() => setSidebarOpen(false)}
+          onTouchStart={(e) => e.preventDefault()} // Android: Prevent touch events from passing through
         />
       )}
 
       {/* Mobile sidebar */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-in-out md:hidden",
+        "fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-in-out md:hidden android-sidebar-fix",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <MockSidebar onClose={() => setSidebarOpen(false)} />

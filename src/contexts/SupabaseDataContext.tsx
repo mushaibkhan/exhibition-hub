@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { 
   Stall, Lead, Service, Transaction, TransactionItem, Payment, Account, 
   StallStatus, LeadStatus, PaymentStatus, ServiceAllocation, StallLayout,
-  Profile, UserRole, AppRole, Exhibition, Expense
+  Profile, UserRole, AppRole, Exhibition, Expense, InternalLedger
 } from '@/types/database';
 
 // Helper function to create user-friendly error messages
@@ -35,6 +35,7 @@ interface SupabaseDataContextType {
   payments: Payment[];
   expenses: Expense[];
   accounts: Account[];
+  internalLedger: InternalLedger[];
   profiles: Profile[];
   userRoles: UserRole[];
   serviceAllocations: ServiceAllocation[];
@@ -48,7 +49,7 @@ interface SupabaseDataContextType {
   deleteService: (id: string) => Promise<void>;
   addServiceAllocation: (allocation: Omit<ServiceAllocation, 'id' | 'created_at'>) => Promise<void>;
   removeServiceAllocation: (id: string) => Promise<void>;
-  addTransaction: (transaction: Omit<Transaction, 'id' | 'transaction_number' | 'created_at' | 'updated_at'>, items: Omit<TransactionItem, 'id' | 'transaction_id' | 'created_at'>[], selectedStallId?: string) => Promise<void>;
+  addTransaction: (transaction: Omit<Transaction, 'id' | 'transaction_number' | 'created_at' | 'updated_at'>, items: Omit<TransactionItem, 'id' | 'transaction_id' | 'created_at'>[], selectedStallId?: string) => Promise<{ transaction: Transaction; items: TransactionItem[]; lead: Lead }>;
   updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
   cancelTransaction: (id: string) => Promise<void>;
   removeServiceFromTransaction: (transactionId: string, itemId: string) => Promise<void>;
@@ -57,6 +58,8 @@ interface SupabaseDataContextType {
   addExpense: (expense: Omit<Expense, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
   updateExpense: (id: string, updates: Partial<Expense>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
+  addInternalTransaction: (entry: Omit<InternalLedger, 'id' | 'created_at' | 'settled_at' | 'status'>) => Promise<void>;
+  settleInternalTransaction: (id: string) => Promise<void>;
   addAccount: (account: Omit<Account, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
   updateAccount: (id: string, updates: Partial<Account>) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
@@ -266,6 +269,22 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
         ...e,
         amount: Number(e.amount),
       })) as Expense[];
+    },
+    enabled: !!currentExhibitionId,
+  });
+
+  const { data: internalLedger = [] } = useQuery({
+    queryKey: ['internal_ledger', currentExhibitionId],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from('internal_ledger' as any) as any)
+        .select('*')
+        .eq('exhibition_id', currentExhibitionId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((entry: any) => ({
+        ...entry,
+        amount: Number(entry.amount),
+      })) as InternalLedger[];
     },
     enabled: !!currentExhibitionId,
   });
@@ -647,13 +666,13 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
         if (!currentExhibitionId) throw new Error('No exhibition selected');
         if (!transaction.lead_id) throw new Error('Lead is required');
         if (!items || items.length === 0) throw new Error('At least one item is required');
-        if (transaction.total_amount <= 0) throw new Error('Transaction total must be greater than zero');
+        if (transaction.total_amount < 0) throw new Error('Transaction total cannot be negative');
         
         // Validate items
         for (const item of items) {
           if (item.item_type === 'stall' && !item.stall_id) throw new Error('Stall ID is required for stall items');
           if (item.item_type === 'service' && !item.service_id) throw new Error('Service ID is required for service items');
-          if (item.final_price <= 0) throw new Error('Item price must be greater than zero');
+          if (item.final_price < 0) throw new Error('Item price cannot be negative');
         }
         
         // Generate transaction number using timestamp to avoid race conditions
@@ -689,6 +708,8 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         // Create service allocations if services are present
         const serviceItems = items.filter(i => i.item_type === 'service');
+        const incrementedServiceIds: string[] = []; // Track for rollback
+        
         if (serviceItems.length > 0 && selectedStallId) {
           const allocations = serviceItems.map(item => ({
             exhibition_id: currentExhibitionId,
@@ -701,27 +722,44 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
             .insert(allocations);
           if (allocError) throw allocError;
 
-          // Update service sold_quantity atomically using RPC or increment
-          const servicesArray = Array.isArray(services) ? services : [];
-          for (const item of serviceItems) {
-            if (item.service_id) {
-              const service = servicesArray.find((s: Service) => s.id === item.service_id);
-              if (service) {
-                // Use atomic increment to avoid race conditions
-                const { error: updateError } = await (supabase.rpc as any)('increment_service_sold_quantity', {
-                  service_id: service.id,
+          // Update service sold_quantity atomically using RPC
+          try {
+            for (const item of serviceItems) {
+              if (item.service_id) {
+                const { error: rpcError } = await supabase.rpc('increment_service_sold_quantity', {
+                  service_id: item.service_id,
                   increment_by: 1
-                }).catch(async () => {
-                  // Fallback to regular update if RPC doesn't exist
-                  const { error } = await supabase
-                    .from('services')
-                    .update({ sold_quantity: service.sold_quantity + 1 })
-                    .eq('id', service.id);
-                  if (error) throw error;
                 });
-                if (updateError) throw updateError;
+
+                if (rpcError) {
+                  // Fallback to regular update if RPC fails
+                  const servicesArray = Array.isArray(services) ? services : [];
+                  const service = servicesArray.find((s: Service) => s.id === item.service_id);
+                  if (service) {
+                    const { error } = await supabase
+                      .from('services')
+                      .update({ sold_quantity: service.sold_quantity + 1 })
+                      .eq('id', service.id);
+                    if (error) throw error;
+                  }
+                }
+                incrementedServiceIds.push(item.service_id);
               }
             }
+          } catch (stockError) {
+            // Rollback: decrement any services we already incremented
+            for (const serviceId of incrementedServiceIds) {
+              try {
+                await supabase.rpc('decrement_service_sold_quantity', {
+                  service_id: serviceId,
+                  decrement_by: 1
+                });
+              } catch {
+                // Best effort rollback - log but don't throw
+                console.error(`Failed to rollback stock for service ${serviceId}`);
+              }
+            }
+            throw stockError;
           }
         }
 
@@ -735,6 +773,13 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
             .eq('id', transaction.lead_id);
           if (leadError) throw leadError;
         }
+        
+        // Return transaction data with items for invoice generation
+        return {
+          transaction: txnData as Transaction,
+          items: itemsWithExhibition as TransactionItem[],
+          lead: leadData as Lead,
+        };
       } catch (error) {
         throw new Error(getErrorMessage(error, 'Failed to create transaction. Please check your input and try again.'));
       }
@@ -805,24 +850,26 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
         if (allocFetchError) throw allocFetchError;
         
         if (allocations && allocations.length > 0) {
-          // Update service sold_quantity atomically
-          const servicesArray = Array.isArray(services) ? services : [];
+          // Update service sold_quantity atomically using RPC
           for (const alloc of allocations) {
-            const service = servicesArray.find((s: Service) => s.id === alloc.service_id);
-            if (service) {
-              // Use atomic decrement to avoid race conditions
-              const { error: updateError } = await (supabase.rpc as any)('decrement_service_sold_quantity', {
-                service_id: service.id,
-                decrement_by: alloc.quantity
-              }).catch(async () => {
-                // Fallback to regular update if RPC doesn't exist
-                const { error } = await supabase
-                  .from('services')
-                  .update({ sold_quantity: Math.max(0, service.sold_quantity - alloc.quantity) })
-                  .eq('id', service.id);
-                if (error) throw error;
+            if (alloc.service_id) {
+              const { error: rpcError } = await supabase.rpc('decrement_service_sold_quantity', {
+                service_id: alloc.service_id,
+                decrement_by: alloc.quantity || 1
               });
-              if (updateError) throw updateError;
+
+              if (rpcError) {
+                // Fallback to regular update if RPC fails
+                const servicesArray = Array.isArray(services) ? services : [];
+                const service = servicesArray.find((s: Service) => s.id === alloc.service_id);
+                if (service) {
+                  const { error } = await supabase
+                    .from('services')
+                    .update({ sold_quantity: Math.max(0, service.sold_quantity - (alloc.quantity || 1)) })
+                    .eq('id', service.id);
+                  if (error) throw error;
+                }
+              }
             }
           }
 
@@ -899,22 +946,23 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
               .eq('id', allocation.id);
             if (deleteError) throw deleteError;
 
-            // Update service sold_quantity atomically
-            const servicesArray = Array.isArray(services) ? services : [];
-            const service = servicesArray.find((s: Service) => s.id === item.service_id);
-            if (service) {
-              const { error: updateServiceError } = await (supabase.rpc as any)('decrement_service_sold_quantity', {
-                service_id: service.id,
-                decrement_by: allocation.quantity
-              }).catch(async () => {
-                // Fallback to regular update if RPC doesn't exist
+            // Update service sold_quantity atomically using RPC
+            const { error: rpcError } = await supabase.rpc('decrement_service_sold_quantity', {
+              service_id: item.service_id,
+              decrement_by: allocation.quantity || 1
+            });
+
+            if (rpcError) {
+              // Fallback to regular update if RPC fails
+              const servicesArray = Array.isArray(services) ? services : [];
+              const service = servicesArray.find((s: Service) => s.id === item.service_id);
+              if (service) {
                 const { error } = await supabase
                   .from('services')
-                  .update({ sold_quantity: Math.max(0, service.sold_quantity - allocation.quantity) })
+                  .update({ sold_quantity: Math.max(0, service.sold_quantity - (allocation.quantity || 1)) })
                   .eq('id', service.id);
                 if (error) throw error;
-              });
-              if (updateServiceError) throw updateServiceError;
+              }
             }
           }
         }
@@ -1132,6 +1180,61 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     onError: (error) => {
       if (import.meta.env.DEV) {
         console.error('Error deleting expense:', error);
+      }
+    },
+  });
+
+  const addInternalTransactionMutation = useMutation({
+    mutationFn: async (entry: Omit<InternalLedger, 'id' | 'created_at' | 'settled_at' | 'status'>) => {
+      try {
+        if (!currentExhibitionId) throw new Error('No exhibition selected');
+        if (!entry.from_name?.trim()) throw new Error('From name is required');
+        if (!entry.to_name?.trim()) throw new Error('To name is required');
+        if (!entry.amount || entry.amount <= 0) throw new Error('Amount must be greater than zero');
+        
+        const { error } = await (supabase.from('internal_ledger' as any) as any)
+          .insert({
+            ...entry,
+            exhibition_id: currentExhibitionId,
+            status: 'pending',
+          });
+        if (error) throw error;
+      } catch (error) {
+        throw new Error(getErrorMessage(error, 'Failed to add internal transaction. Please try again.'));
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['internal_ledger', currentExhibitionId] });
+    },
+    onError: (error) => {
+      if (import.meta.env.DEV) {
+        console.error('Error adding internal transaction:', error);
+      }
+    },
+  });
+
+  const settleInternalTransactionMutation = useMutation({
+    mutationFn: async (id: string) => {
+      try {
+        if (!currentExhibitionId) throw new Error('No exhibition selected');
+        const { error } = await (supabase.from('internal_ledger' as any) as any)
+          .update({ 
+            status: 'settled',
+            settled_at: new Date().toISOString()
+          })
+          .eq('id', id)
+          .eq('exhibition_id', currentExhibitionId);
+        if (error) throw error;
+      } catch (error) {
+        throw new Error(getErrorMessage(error, 'Failed to settle transaction. Please try again.'));
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['internal_ledger', currentExhibitionId] });
+    },
+    onError: (error) => {
+      if (import.meta.env.DEV) {
+        console.error('Error settling internal transaction:', error);
       }
     },
   });
@@ -1379,8 +1482,8 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     transaction: Omit<Transaction, 'id' | 'transaction_number' | 'created_at' | 'updated_at'>,
     items: Omit<TransactionItem, 'id' | 'transaction_id' | 'created_at'>[],
     selectedStallId?: string
-  ) => {
-    await addTransactionMutation.mutateAsync({ transaction, items, selectedStallId });
+  ): Promise<{ transaction: Transaction; items: TransactionItem[]; lead: Lead }> => {
+    return await addTransactionMutation.mutateAsync({ transaction, items, selectedStallId });
   }, [addTransactionMutation]);
 
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>) => {
@@ -1414,6 +1517,14 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const deleteExpense = useCallback(async (id: string) => {
     await deleteExpenseMutation.mutateAsync(id);
   }, [deleteExpenseMutation]);
+
+  const addInternalTransaction = useCallback(async (entry: Omit<InternalLedger, 'id' | 'created_at' | 'settled_at' | 'status'>) => {
+    await addInternalTransactionMutation.mutateAsync(entry);
+  }, [addInternalTransactionMutation]);
+
+  const settleInternalTransaction = useCallback(async (id: string) => {
+    await settleInternalTransactionMutation.mutateAsync(id);
+  }, [settleInternalTransactionMutation]);
 
   const addAccount = useCallback(async (account: Omit<Account, 'id' | 'created_at' | 'updated_at'>) => {
     await addAccountMutation.mutateAsync(account);
@@ -1787,6 +1898,7 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     payments,
     expenses,
     accounts,
+    internalLedger,
     profiles,
     userRoles,
     serviceAllocations,
@@ -1809,6 +1921,8 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     addExpense,
     updateExpense,
     deleteExpense,
+    addInternalTransaction,
+    settleInternalTransaction,
     addAccount,
     updateAccount,
     deleteAccount,
@@ -1840,10 +1954,11 @@ export const SupabaseDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     currentExhibitionId,
   }), [
     role, isAdmin, stallsWithStatus, leads, services, transactionsWithSummary, transactionItems, 
-    payments, expenses, accounts, profiles, userRoles, serviceAllocations, layoutsData,
+    payments, expenses, accounts, internalLedger, profiles, userRoles, serviceAllocations, layoutsData,
     updateStall, addLead, updateLead, deleteLead, addService, updateService, deleteService,
     addServiceAllocation, removeServiceAllocation, addTransaction, updateTransaction, 
-    cancelTransaction, removeServiceFromTransaction, deletePayment, addPayment, addExpense, updateExpense, deleteExpense, addAccount, updateAccount, deleteAccount,
+    cancelTransaction, removeServiceFromTransaction, deletePayment, addPayment, addExpense, updateExpense, deleteExpense,
+    addInternalTransaction, settleInternalTransaction, addAccount, updateAccount, deleteAccount,
     createUser, updateUser, updateUserPassword, deactivateUser, activateUser, assignUserRole, removeUserRole,
     addExhibition, updateExhibition, deleteExhibition,
     getLeadById, getStallById, getStallByNumber, getTransactionById, getTransactionsByLeadId,
@@ -1864,7 +1979,4 @@ export const useSupabaseData = () => {
   if (!context) throw new Error('useSupabaseData must be used within a SupabaseDataProvider');
   return context;
 };
-
-// Alias for backward compatibility during migration
-export const useMockData = useSupabaseData;
 

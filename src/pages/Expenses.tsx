@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useState } from 'react';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
-import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -70,7 +70,7 @@ const categoryColors: Record<ExpenseCategory, string> = {
 };
 
 const Expenses = () => {
-  const { isAdmin, expenses, accounts, addExpense, updateExpense, deleteExpense } = useMockData();
+  const { isAdmin, expenses, accounts, addExpense, updateExpense, deleteExpense } = useSupabaseData();
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -94,6 +94,22 @@ const Expenses = () => {
   const filteredExpenses = expenses.filter(e => 
     categoryFilter === 'all' || e.category === categoryFilter
   );
+
+  // Active accounts only (status === 'Active' via is_active)
+  const activeAccounts = accounts.filter((a) => a.is_active === true);
+
+  // Filter accounts by payment mode: Bank → bank_details, UPI → upi_details, Cash → none
+  const filteredAccountsByMode = (() => {
+    switch (formData.payment_mode) {
+      case 'bank':
+        return activeAccounts.filter((a) => a.bank_details && a.bank_details.trim() !== '');
+      case 'upi':
+        return activeAccounts.filter((a) => a.upi_details && a.upi_details.trim() !== '');
+      case 'cash':
+      default:
+        return [];
+    }
+  })();
 
   const stats = {
     total: expenses.length,
@@ -223,7 +239,7 @@ const Expenses = () => {
         description: formData.description.trim(),
         amount: formData.amount,
         payment_mode: formData.payment_mode,
-        account_id: formData.account_id || null,
+        account_id: formData.payment_mode === 'cash' ? null : (formData.account_id || null),
         notes: formData.notes || null,
       };
 
@@ -392,7 +408,27 @@ const Expenses = () => {
                     <Label htmlFor="payment_mode">
                       Payment Mode <span className="text-destructive">*</span>
                     </Label>
-                    <Select value={formData.payment_mode} onValueChange={(v) => setFormData({ ...formData, payment_mode: v as PaymentMode })}>
+                    <Select
+                      value={formData.payment_mode}
+                      onValueChange={(v) => {
+                        const newMode = v as PaymentMode;
+                        const nextFiltered =
+                          newMode === 'bank'
+                            ? activeAccounts.filter((a) => a.bank_details && a.bank_details.trim() !== '')
+                            : newMode === 'upi'
+                              ? activeAccounts.filter((a) => a.upi_details && a.upi_details.trim() !== '')
+                              : [];
+                        const keepAccount =
+                          newMode !== 'cash' &&
+                          formData.account_id &&
+                          nextFiltered.some((a) => a.id === formData.account_id);
+                        setFormData({
+                          ...formData,
+                          payment_mode: newMode,
+                          account_id: keepAccount ? formData.account_id : '',
+                        });
+                      }}
+                    >
                       <SelectTrigger className="h-10">
                         <SelectValue />
                       </SelectTrigger>
@@ -404,20 +440,27 @@ const Expenses = () => {
                     </Select>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="account_id">Account (Optional)</Label>
-                  <Select value={formData.account_id || 'none'} onValueChange={(v) => setFormData({ ...formData, account_id: v === 'none' ? '' : v })}>
-                    <SelectTrigger className="h-10">
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {accounts.filter(a => a.is_active).map(account => (
-                        <SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {(formData.payment_mode === 'bank' || formData.payment_mode === 'upi') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="account_id">Account (Optional)</Label>
+                    <Select
+                      value={formData.account_id || 'none'}
+                      onValueChange={(v) => setFormData({ ...formData, account_id: v === 'none' ? '' : v })}
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Select account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {filteredAccountsByMode.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="notes">Notes (Optional)</Label>
                   <Textarea

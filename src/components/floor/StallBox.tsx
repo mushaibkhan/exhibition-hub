@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { Stall, StallStatus } from '@/types/database';
-import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
 import {
   Tooltip,
   TooltipContent,
@@ -35,7 +35,7 @@ const statusLabels: Record<StallStatus, string> = {
 };
 
 export const StallBox = ({ stall, assignedTo, amountPaid, totalAmount, hasServices, hasPendingPayment, serviceCount, onClick }: StallBoxProps) => {
-  const { isAdmin } = useMockData();
+  const { isAdmin } = useSupabaseData();
 
   // Explicit grid positioning - CSS Grid uses 1-based indexing
   // position_x and position_y are 0-based, so add 1 for grid-row-start and grid-column-start

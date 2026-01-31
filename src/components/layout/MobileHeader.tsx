@@ -15,7 +15,7 @@ export const MobileHeader = ({ title, subtitle, sidebarOpen, onToggleSidebar }: 
   const { currentExhibition } = useExhibition();
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 md:h-16 items-center justify-between border-b bg-background/95 px-3 md:px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="mobile-header sticky top-0 z-40 flex h-14 md:h-16 items-center justify-between border-b bg-background/95 px-3 md:px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
         {/* Mobile menu toggle */}
         <Button

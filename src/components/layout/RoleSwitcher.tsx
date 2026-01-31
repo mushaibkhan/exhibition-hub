@@ -1,11 +1,11 @@
-import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Shield, User } from 'lucide-react';
 
 export const RoleSwitcher = () => {
-  const { role, setRole, isAdmin } = useMockData();
+  const { role, setRole, isAdmin } = useSupabaseData();
 
   return (
     <div className="flex items-center gap-3 rounded-lg border bg-card p-3 shadow-sm">

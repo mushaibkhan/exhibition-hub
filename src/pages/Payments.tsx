@@ -1,7 +1,7 @@
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
-import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
 import { useExhibition } from '@/contexts/ExhibitionContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { buildInvoiceData, generateInvoiceNumber } from '@/lib/invoiceUtils';
@@ -18,8 +18,8 @@ import { exportToExcel, formatDateForExport, formatCurrencyForExport } from '@/l
 const modeColors: Record<PaymentMode, string> = { cash: 'bg-green-100 text-green-800', upi: 'bg-purple-100 text-purple-800', bank: 'bg-blue-100 text-blue-800' };
 const modeIcons: Record<PaymentMode, React.ElementType> = { cash: Banknote, upi: Smartphone, bank: CreditCard };
 
-const Payments = () => {
-  const { payments, transactions, accounts, transactionItems, getLeadById, getItemsByTransactionId, getPaymentsByTransactionId } = useMockData();
+const Receipts = () => {
+  const { payments, transactions, accounts, transactionItems, getLeadById, getItemsByTransactionId, getPaymentsByTransactionId } = useSupabaseData();
   const { currentExhibition } = useExhibition();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -122,15 +122,15 @@ const Payments = () => {
         };
       });
 
-      exportToExcel(exportData, 'Payments_Export', 'Payments');
-      toast({ title: 'Success', description: `Exported ${exportData.length} payment(s) to Excel` });
+      exportToExcel(exportData, 'Receipts_Export', 'Receipts');
+      toast({ title: 'Success', description: `Exported ${exportData.length} receipt(s) to Excel` });
     } finally {
       setIsExporting(false);
     }
   };
 
   return (
-    <MockAppLayout title="Payments" subtitle="Payment records">
+    <MockAppLayout title="Receipts" subtitle="Payment receipts">
       <div className="space-y-6">
         <div className="flex justify-end">
           <Button variant="outline" onClick={handleExport} disabled={payments.length === 0 || isExporting} className="w-full sm:w-auto h-10 min-h-[44px]">
@@ -216,4 +216,4 @@ const Payments = () => {
   );
 };
 
-export default Payments;
+export default Receipts;

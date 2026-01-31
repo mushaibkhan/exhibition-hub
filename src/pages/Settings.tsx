@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
-import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
 import { useExhibition } from '@/contexts/ExhibitionContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +27,7 @@ import {
 import { format } from 'date-fns';
 
 const SettingsPage = () => {
-  const { isAdmin, addExhibition, updateExhibition, deleteExhibition } = useMockData();
+  const { isAdmin, addExhibition, updateExhibition, deleteExhibition } = useSupabaseData();
   const { exhibitions, isLoading: exhibitionsLoading } = useExhibition();
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);

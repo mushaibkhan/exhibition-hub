@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stall, Lead, Transaction } from '@/types/database';
-import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -42,7 +42,7 @@ export const StallDrawer = ({ stall, lead, transaction, open, onOpenChange, onUp
     isAdmin, role, updateStall: updateStallFn, getLeadById, transactions, 
     getTransactionsByStallId, getItemsByTransactionId, getPaymentsByTransactionId,
     getServiceAllocationsByStallId, services, getServiceById
-  } = useMockData();
+  } = useSupabaseData();
   const navigate = useNavigate();
   const isMaintainer = role === 'maintainer';
   const { toast } = useToast();

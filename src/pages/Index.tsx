@@ -4,12 +4,12 @@ import { MockAppLayout } from '@/components/layout/MockAppLayout';
 import { StallBox } from '@/components/floor/StallBox';
 import { FloorLegend } from '@/components/floor/FloorLegend';
 import { StallDrawer } from '@/components/floor/StallDrawer';
-import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
 import { Stall } from '@/types/database';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index = () => {
-  const { stalls, getLeadById, transactions, getServiceAllocationsByStallId, getTransactionsByStallId } = useMockData();
+  const { stalls, getLeadById, transactions, getServiceAllocationsByStallId, getTransactionsByStallId } = useSupabaseData();
   const location = useLocation();
   const [selectedStall, setSelectedStall] = useState<Stall | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);

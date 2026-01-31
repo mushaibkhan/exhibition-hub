@@ -14,6 +14,8 @@ import {
   Settings,
   LogOut,
   DollarSign,
+  Tag,
+  Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -34,11 +36,13 @@ const navItems: NavItem[] = [
   // Operations section
   { label: 'Leads', path: '/leads', icon: Users, section: 'Operations' },
   { label: 'Bookings', path: '/transactions', icon: Receipt, section: 'Operations' },
-  { label: 'Payments', path: '/payments', icon: CreditCard, section: 'Operations' },
+  { label: 'Receipts', path: '/receipts', icon: CreditCard, section: 'Operations' },
   { label: 'Expenses', path: '/expenses', icon: DollarSign, adminOnly: true, section: 'Operations' },
+  { label: 'Team Ledger', path: '/team-ledger', icon: Wallet, section: 'Operations' },
   
   // Reference section
   { label: 'Stalls', path: '/stalls', icon: Square, section: 'Reference' },
+  { label: 'Stall Prices', path: '/stall-prices', icon: Tag, adminOnly: true, section: 'Reference' },
   { label: 'Services', path: '/services', icon: Package, section: 'Reference' },
   
   // Admin section

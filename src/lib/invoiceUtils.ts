@@ -87,6 +87,7 @@ export async function generateInvoiceNumber(existingPayments: Payment[]): Promis
 
 /**
  * Build invoice data from payment and related entities
+ * Uses GST values from the transaction if is_gst is true
  */
 export function buildInvoiceData(
   payment: Payment,
@@ -100,8 +101,8 @@ export function buildInvoiceData(
   const stallItem = items.find(item => item.item_type === 'stall' && item.stall_id);
   const stallNumber = stallItem ? stallItem.item_name.replace('Stall ', '') : null;
   
-  // Calculate subtotal from transaction items
-  const subtotal = items.reduce((sum, item) => sum + item.final_price, 0);
+  // Use transaction's subtotal if available, otherwise calculate from items
+  const subtotal = transaction.subtotal || items.reduce((sum, item) => sum + item.final_price, 0);
   
   // Extract buyer state from address (default to Telangana if cannot detect)
   const sellerState = 'Telangana';
@@ -132,27 +133,28 @@ export function buildInvoiceData(
     }
   }
   
-  // Calculate taxes based on state
+  // Use GST values from transaction if is_gst is true, otherwise calculate based on state
+  const isGst = transaction.is_gst || false;
   let cgst = 0;
   let sgst = 0;
   let igst = 0;
   let taxType: 'cgst_sgst' | 'igst' = 'cgst_sgst';
   
-  if (buyerState === sellerState || buyerState === 'Telangana') {
-    // Same state: CGST + SGST (9% each = 18% total)
-    cgst = Math.round(subtotal * INVOICE_CONFIG.cgstRate);
-    sgst = Math.round(subtotal * INVOICE_CONFIG.sgstRate);
-    igst = 0;
+  if (isGst) {
+    // Use the stored GST values from the transaction
+    cgst = transaction.cgst_amount || 0;
+    sgst = transaction.sgst_amount || 0;
+    igst = 0; // For now, we only support intra-state GST (CGST + SGST)
     taxType = 'cgst_sgst';
-  } else {
-    // Different state: IGST (18%)
-    cgst = 0;
-    sgst = 0;
-    igst = Math.round(subtotal * 0.18);
+  } else if (buyerState !== sellerState && buyerState !== 'Telangana') {
+    // Different state: would be IGST (18%) - but only if GST was applied
+    // For non-GST transactions, no tax is shown
+    igst = 0;
     taxType = 'igst';
   }
   
-  const grandTotal = subtotal + cgst + sgst + igst;
+  // Grand total from transaction (includes GST if applicable)
+  const grandTotal = transaction.total_amount;
   
   // Calculate total payments made so far
   const totalPaid = allPayments.reduce((sum, p) => sum + p.amount, 0);
@@ -193,11 +195,15 @@ export function buildInvoiceData(
     quantity: 1,
     rate: subtotal,
     amount: subtotal,
+    isGst,
     cgst,
     sgst,
     igst,
     grandTotal,
     taxType,
+    discountAmount: transaction.discount_amount || 0,
+    discountType: transaction.discount_type,
+    discountValue: transaction.discount_value,
     amountPaid: payment.amount,
     balanceDue: Math.max(0, balanceDue),
     amountInWords: numberToWords(grandTotal), // numberToWords already includes "INR" prefix

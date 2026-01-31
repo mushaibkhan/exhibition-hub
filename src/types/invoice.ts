@@ -29,11 +29,17 @@ export interface InvoiceData {
   amount: number; // Subtotal before tax
   
   // Tax calculations
+  isGst: boolean; // Whether GST is applied (determines Tax Invoice vs Bill of Supply)
   cgst: number;
   sgst: number;
   igst: number; // IGST for interstate transactions
   grandTotal: number;
   taxType: 'cgst_sgst' | 'igst'; // Tax calculation type
+  
+  // Discount information
+  discountAmount?: number;
+  discountType?: 'fixed' | 'percentage' | null;
+  discountValue?: number | null;
   
   // Payment information
   amountPaid: number; // This payment amount

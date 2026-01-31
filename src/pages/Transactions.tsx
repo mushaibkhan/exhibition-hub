@@ -1,26 +1,27 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
-import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
 import { useExhibition } from '@/contexts/ExhibitionContext';
 import { buildInvoiceData, generateInvoiceNumber } from '@/lib/invoiceUtils';
-import { downloadInvoicePDF } from '@/lib/generateInvoicePDF';
+import { downloadInvoicePDF, buildBookingInvoiceData } from '@/lib/generateInvoicePDF';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { PaymentStatus, PaymentMode, Lead, TransactionItem } from '@/types/database';
-import { Search, ChevronDown, ChevronUp, Plus, CreditCard, Receipt, ShoppingCart, PlusCircle, X, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
+import { PaymentStatus, PaymentMode, Lead, TransactionItem, ServiceCategory } from '@/types/database';
+import { Search, ChevronDown, ChevronUp, Plus, CreditCard, Receipt, ShoppingCart, PlusCircle, X, Trash2, AlertTriangle, Loader2, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ResponsiveDataView } from '@/components/ui/responsive-table';
+import { Switch } from '@/components/ui/switch';
 
 const statusColors: Record<PaymentStatus, string> = { 
   unpaid: 'bg-red-100 text-red-800', 
@@ -35,8 +36,8 @@ const Transactions = () => {
     transactions, leads, stalls, services, accounts, transactionItems, payments,
     getLeadById, getItemsByTransactionId, getPaymentsByTransactionId, getAvailableStalls, getStallsByLeadId, getStallById,
     addTransaction, addPayment, cancelTransaction, removeServiceFromTransaction, deletePayment,
-    isAdmin 
-  } = useMockData();
+    addService, isAdmin 
+  } = useSupabaseData();
   const { currentExhibition } = useExhibition();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
@@ -55,6 +56,13 @@ const Transactions = () => {
   }>>([]);
   const [selectedStallForServices, setSelectedStallForServices] = useState<string>('');
   const [txnNotes, setTxnNotes] = useState('');
+  
+  // Discount state
+  const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
+  const [discountValue, setDiscountValue] = useState<string>('');
+  
+  // GST state
+  const [applyGst, setApplyGst] = useState<boolean>(false);
 
   // Add Payment Dialog
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -70,6 +78,16 @@ const Transactions = () => {
   const [cancelTxnId, setCancelTxnId] = useState<string>('');
   const [deletePaymentDialogOpen, setDeletePaymentDialogOpen] = useState(false);
   const [deletePaymentId, setDeletePaymentId] = useState<string>('');
+
+  // Add New Service Dialog
+  const [addServiceDialogOpen, setAddServiceDialogOpen] = useState(false);
+  const [newServiceData, setNewServiceData] = useState({
+    name: '',
+    category: 'add_on' as ServiceCategory,
+    price: '',
+    description: '',
+  });
+  const [isAddingService, setIsAddingService] = useState(false);
 
   const availableStalls = getAvailableStalls();
   
@@ -177,7 +195,104 @@ const Transactions = () => {
     setSelectedItems(selectedItems.filter(i => i.id !== id));
   };
 
-  const totalAmount = selectedItems.reduce((sum, i) => sum + i.price, 0);
+  // Handle adding a new service to the catalog
+  const handleAddNewService = async () => {
+    if (isAddingService) return;
+    
+    // Validation
+    const trimmedName = newServiceData.name.trim();
+    if (!trimmedName) {
+      toast({
+        title: 'Validation Error',
+        description: 'Service name is required.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Check for duplicate name
+    const isDuplicateName = services.some(s => 
+      s.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (isDuplicateName) {
+      toast({
+        title: 'Duplicate Service',
+        description: `A service named "${trimmedName}" already exists. Please use a different name.`,
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const priceNum = parseFloat(newServiceData.price);
+    if (isNaN(priceNum) || priceNum <= 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Price must be a positive number.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsAddingService(true);
+    try {
+      const newService = await addService({
+        exhibition_id: '', // Will be set by context
+        name: trimmedName,
+        category: newServiceData.category,
+        description: newServiceData.description.trim() || null,
+        price: priceNum,
+        quantity: 1,
+        sold_quantity: 0,
+        is_unlimited: true, // New services are unlimited by default
+        notes: null,
+      });
+
+      // Auto-select the newly created service
+      setSelectedItems(prev => [...prev, {
+        type: 'service',
+        id: newService.id,
+        name: newService.name,
+        price: newService.price,
+      }]);
+
+      toast({
+        title: 'Service Created',
+        description: `"${newService.name}" has been added to the catalog and selected for this transaction.`,
+      });
+
+      // Reset and close dialog
+      setNewServiceData({
+        name: '',
+        category: 'add_on',
+        price: '',
+        description: '',
+      });
+      setAddServiceDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to create service.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsAddingService(false);
+    }
+  };
+
+  const subtotal = selectedItems.reduce((sum, i) => sum + i.price, 0);
+  
+  // Calculate discount
+  const discountNumValue = Number(discountValue) || 0;
+  const discountAmount = discountType === 'percentage' 
+    ? Math.round((subtotal * discountNumValue) / 100)
+    : discountNumValue;
+  const afterDiscount = Math.max(0, subtotal - discountAmount);
+  
+  // Calculate GST (9% CGST + 9% SGST = 18%)
+  const cgstAmount = applyGst ? Math.round(afterDiscount * 0.09) : 0;
+  const sgstAmount = applyGst ? Math.round(afterDiscount * 0.09) : 0;
+  const gstAmount = cgstAmount + sgstAmount;
+  const totalAmount = afterDiscount + gstAmount;
 
   // Determine transaction type
   const transactionType = (!leadOwnsStalls || hasStallsInTransaction) 
@@ -192,6 +307,24 @@ const Transactions = () => {
         title: 'Missing Information', 
         description: 'Please select a buyer and add at least one item (stall or service) to create a transaction.', 
         variant: 'destructive' 
+      });
+      return;
+    }
+
+    // Stock validation: Check if any selected services are now out of stock
+    const serviceItems = selectedItems.filter(i => i.type === 'service');
+    const outOfStockServices = serviceItems.filter(item => {
+      const service = services.find(s => s.id === item.id);
+      if (!service) return false;
+      return !service.is_unlimited && service.sold_quantity >= service.quantity;
+    });
+
+    if (outOfStockServices.length > 0) {
+      const outOfStockNames = outOfStockServices.map(s => s.name).join(', ');
+      toast({
+        title: 'Out of Stock',
+        description: `${outOfStockNames} just went out of stock. Please remove ${outOfStockServices.length > 1 ? 'these services' : 'this service'} and try again.`,
+        variant: 'destructive'
       });
       return;
     }
@@ -288,16 +421,39 @@ const Transactions = () => {
     const isServiceOnly = hasServices && !hasStalls;
     const selectedStallId = isServiceOnly ? selectedStallForServices : undefined;
 
+    // Build notes with discount info if applicable
+    let finalNotes = txnNotes || '';
+    if (discountAmount > 0) {
+      const discountInfo = discountType === 'percentage' 
+        ? `Discount: ${discountNumValue}% (₹${discountAmount.toLocaleString()} off ₹${subtotal.toLocaleString()})`
+        : `Discount: ₹${discountAmount.toLocaleString()} off ₹${subtotal.toLocaleString()}`;
+      finalNotes = finalNotes ? `${finalNotes}\n${discountInfo}` : discountInfo;
+    }
+    if (applyGst) {
+      const gstInfo = `GST Applied: CGST ₹${cgstAmount.toLocaleString()} + SGST ₹${sgstAmount.toLocaleString()} = ₹${gstAmount.toLocaleString()}`;
+      finalNotes = finalNotes ? `${finalNotes}\n${gstInfo}` : gstInfo;
+    }
+
     setIsSubmitting(true);
     try {
-      await addTransaction({
-      lead_id: selectedLead,
-      total_amount: totalAmount,
-      notes: txnNotes || null,
-      created_by: null,
-      exhibition_id: currentExhibition?.id || '',
-      cancelled: false,
-      cancelled_at: null,
+      const result = await addTransaction({
+        lead_id: selectedLead,
+        // GST fields
+        is_gst: applyGst,
+        subtotal: afterDiscount,
+        cgst_amount: cgstAmount,
+        sgst_amount: sgstAmount,
+        gst_amount: gstAmount,
+        total_amount: totalAmount,
+        // Discount fields
+        discount_type: discountAmount > 0 ? discountType : null,
+        discount_value: discountAmount > 0 ? discountNumValue : null,
+        discount_amount: discountAmount,
+        notes: finalNotes || null,
+        created_by: null,
+        exhibition_id: currentExhibition?.id || '',
+        cancelled: false,
+        cancelled_at: null,
       }, items, selectedStallId);
 
       // Enhanced toast messages
@@ -318,11 +474,44 @@ const Transactions = () => {
       }
       
       toast({ title: 'Success', description: toastMessage });
+      
+      // Auto-generate invoice/bill after successful booking
+      try {
+        if (result && result.transaction && result.lead) {
+          const invoiceNumber = result.transaction.transaction_number.replace('TXN', 'INV');
+          const invoiceData = buildBookingInvoiceData(
+            result.transaction,
+            result.lead,
+            result.items,
+            invoiceNumber
+          );
+          // Download the invoice automatically
+          downloadInvoicePDF(invoiceData);
+          toast({ 
+            title: 'Invoice Generated', 
+            description: `${applyGst ? 'Tax Invoice' : 'Bill of Supply'} downloaded automatically.`,
+            duration: 3000
+          });
+        }
+      } catch (invoiceError) {
+        // Don't fail the transaction if invoice generation fails
+        console.error('Failed to generate invoice:', invoiceError);
+        toast({
+          title: 'Invoice Warning',
+          description: 'Booking created but invoice could not be generated. You can download it later from the Receipts page.',
+          variant: 'default',
+          duration: 5000
+        });
+      }
+      
     setCreateDialogOpen(false);
     setSelectedLead('');
     setSelectedItems([]);
       setSelectedStallForServices('');
     setTxnNotes('');
+      setDiscountType('fixed');
+      setDiscountValue('');
+      setApplyGst(false);
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -567,8 +756,8 @@ const Transactions = () => {
                   const pendingAmount = txn.total_amount - txn.amount_paid;
                   
                   return (
-                    <>
-                      <TableRow key={txn.id} className="cursor-pointer" onClick={() => setExpandedRow(isExpanded ? null : txn.id)}>
+                    <React.Fragment key={txn.id}>
+                      <TableRow className="cursor-pointer" onClick={() => setExpandedRow(isExpanded ? null : txn.id)}>
                         <TableCell onClick={(e) => e.stopPropagation()}>{isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</TableCell>
                         <TableCell 
                           className="font-medium hover:text-primary hover:underline cursor-pointer"
@@ -772,7 +961,7 @@ const Transactions = () => {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </React.Fragment>
                   ); 
                 })}
                 {filteredTxns.length === 0 && (
@@ -822,6 +1011,9 @@ const Transactions = () => {
         <DialogContent className="w-[95vw] sm:max-w-[600px] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Booking</DialogTitle>
+            <DialogDescription>
+              Select a buyer, add stalls and services, and confirm the booking details.
+            </DialogDescription>
             {selectedLead && (
               <div className="pt-3 pb-1">
                 <Badge variant="secondary" className="text-sm font-medium flex items-center gap-1.5 w-fit">
@@ -989,6 +1181,17 @@ const Transactions = () => {
                     )}
                 </SelectContent>
               </Select>
+              {/* Add New Service Button */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => setAddServiceDialogOpen(true)}
+              >
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Add New Service to Catalog
+              </Button>
               </div>
             </div>
 
@@ -1113,9 +1316,95 @@ const Transactions = () => {
                     </div>
                   )}
 
-                  {/* Total */}
-                  <div className="flex justify-between pt-3 border-t font-semibold">
-                    <span>Total</span>
+                  {/* Discount Section */}
+                  <div className="space-y-3 pt-3 border-t">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Subtotal</span>
+                      <span className="text-sm font-medium">₹{subtotal.toLocaleString()}</span>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label className="text-sm">Discount</Label>
+                      <div className="flex gap-2">
+                        <Select value={discountType} onValueChange={(v: 'fixed' | 'percentage') => setDiscountType(v)}>
+                          <SelectTrigger className="w-[100px] h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="fixed">₹ Fixed</SelectItem>
+                            <SelectItem value="percentage">% Percent</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <div className="relative flex-1">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={discountType === 'percentage' ? 100 : subtotal}
+                            step={discountType === 'percentage' ? 1 : 100}
+                            value={discountValue}
+                            onChange={(e) => setDiscountValue(e.target.value)}
+                            placeholder={discountType === 'percentage' ? 'Enter %' : 'Enter amount'}
+                            className="h-9 pr-8"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                            {discountType === 'percentage' ? '%' : '₹'}
+                          </span>
+                        </div>
+                      </div>
+                      {discountAmount > 0 && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Discount {discountType === 'percentage' && `(${discountNumValue}%)`}
+                          </span>
+                          <span className="text-green-600 font-medium">-₹{discountAmount.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* After Discount Subtotal */}
+                    {discountAmount > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Subtotal (after discount)</span>
+                        <span className="font-medium">₹{afterDiscount.toLocaleString()}</span>
+                      </div>
+                    )}
+                    
+                    {/* GST Toggle */}
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="apply-gst"
+                          checked={applyGst}
+                          onCheckedChange={setApplyGst}
+                        />
+                        <Label htmlFor="apply-gst" className="text-sm cursor-pointer">
+                          Apply GST (18%)
+                        </Label>
+                      </div>
+                    </div>
+                    
+                    {/* GST Breakdown */}
+                    {applyGst && (
+                      <div className="space-y-1 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">CGST (9%)</span>
+                          <span className="font-medium">₹{cgstAmount.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">SGST (9%)</span>
+                          <span className="font-medium">₹{sgstAmount.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm pt-1 border-t border-blue-200 dark:border-blue-700">
+                          <span className="text-muted-foreground font-medium">Total GST</span>
+                          <span className="font-semibold text-blue-700 dark:text-blue-300">₹{gstAmount.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Grand Total */}
+                  <div className="flex justify-between pt-3 border-t font-semibold text-lg">
+                    <span>{applyGst ? 'Grand Total (incl. GST)' : 'Total'}</span>
                     <span>₹{totalAmount.toLocaleString()}</span>
                   </div>
                 </div>
@@ -1146,6 +1435,9 @@ const Transactions = () => {
         <DialogContent className="w-[95vw] sm:max-w-[450px] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              Enter payment details to update the transaction balance.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             {paymentTxnId && (() => {
@@ -1255,17 +1547,19 @@ const Transactions = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel Booking</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to cancel this booking? This will:
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Release only the stalls purchased in <strong>this booking</strong> (they will become available again)</li>
-                <li>Remove only the service allocations created as part of <strong>this booking</strong></li>
-                <li>Keep the booking visible as "Cancelled" for audit purposes</li>
-              </ul>
-              <p className="mt-2 text-sm text-muted-foreground">
-                <strong>Note:</strong> This will only affect items in this specific booking. Previous bookings and their items will remain unchanged.
-              </p>
-              <p className="mt-2 font-medium">This action cannot be undone.</p>
+            <AlertDialogDescription asChild>
+              <div>
+                Are you sure you want to cancel this booking? This will:
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Release only the stalls purchased in <strong>this booking</strong> (they will become available again)</li>
+                  <li>Remove only the service allocations created as part of <strong>this booking</strong></li>
+                  <li>Keep the booking visible as "Cancelled" for audit purposes</li>
+                </ul>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  <strong>Note:</strong> This will only affect items in this specific booking. Previous bookings and their items will remain unchanged.
+                </p>
+                <p className="mt-2 font-medium">This action cannot be undone.</p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1296,14 +1590,16 @@ const Transactions = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Payment</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this payment record? This will:
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Remove the payment from the transaction</li>
-                <li>Recalculate the transaction payment status automatically</li>
-                <li>Update stall status if needed</li>
-              </ul>
-              <p className="mt-2 font-medium">This action cannot be undone.</p>
+            <AlertDialogDescription asChild>
+              <div>
+                Are you sure you want to delete this payment record? This will:
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Remove the payment from the transaction</li>
+                  <li>Recalculate the transaction payment status automatically</li>
+                  <li>Update stall status if needed</li>
+                </ul>
+                <p className="mt-2 font-medium">This action cannot be undone.</p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1327,6 +1623,123 @@ const Transactions = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Add New Service Dialog */}
+      <Dialog open={addServiceDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setAddServiceDialogOpen(false);
+          setNewServiceData({ name: '', category: 'add_on', price: '', description: '' });
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PlusCircle className="h-5 w-5" />
+              Add New Service to Catalog
+            </DialogTitle>
+            <DialogDescription>
+              Add a service to the catalog for this transaction.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* Service Name */}
+            <div className="space-y-2">
+              <Label htmlFor="new-service-name">Service Name *</Label>
+              <Input
+                id="new-service-name"
+                placeholder="e.g., Extra Table, Premium Banner"
+                value={newServiceData.name}
+                onChange={(e) => setNewServiceData(prev => ({ ...prev, name: e.target.value }))}
+                className="h-10"
+              />
+            </div>
+
+            {/* Category */}
+            <div className="space-y-2">
+              <Label htmlFor="new-service-category">Category *</Label>
+              <Select 
+                value={newServiceData.category} 
+                onValueChange={(v: ServiceCategory) => setNewServiceData(prev => ({ ...prev, category: v }))}
+              >
+                <SelectTrigger className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sponsor">Sponsor</SelectItem>
+                  <SelectItem value="signboard">Signboard</SelectItem>
+                  <SelectItem value="food_court">Food Court</SelectItem>
+                  <SelectItem value="add_on">Add-on</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Price */}
+            <div className="space-y-2">
+              <Label htmlFor="new-service-price">Price (₹) *</Label>
+              <Input
+                id="new-service-price"
+                type="number"
+                min="1"
+                step="1"
+                placeholder="e.g., 500"
+                value={newServiceData.price}
+                onChange={(e) => setNewServiceData(prev => ({ ...prev, price: e.target.value }))}
+                className="h-10"
+              />
+            </div>
+
+            {/* Description (Optional) */}
+            <div className="space-y-2">
+              <Label htmlFor="new-service-description">Description (Optional)</Label>
+              <Textarea
+                id="new-service-description"
+                placeholder="Brief description of the service..."
+                value={newServiceData.description}
+                onChange={(e) => setNewServiceData(prev => ({ ...prev, description: e.target.value }))}
+                rows={2}
+              />
+            </div>
+
+            {/* Info box about GST */}
+            <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+              <p className="text-xs text-blue-800 dark:text-blue-200">
+                <strong>Note:</strong> The service price will be added to the transaction subtotal. 
+                If GST is enabled, 18% GST (9% CGST + 9% SGST) will be calculated on the total subtotal including this service.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAddServiceDialogOpen(false);
+                  setNewServiceData({ name: '', category: 'add_on', price: '', description: '' });
+                }}
+                disabled={isAddingService}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleAddNewService}
+                disabled={isAddingService || !newServiceData.name.trim() || !newServiceData.price}
+              >
+                {isAddingService ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Create & Add to Transaction
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </MockAppLayout>
   );
 };

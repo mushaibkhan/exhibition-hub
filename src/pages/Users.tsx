@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
-import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -26,7 +26,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 
 const UsersPage = () => {
-  const { isAdmin, profiles, userRoles, createUser, updateUser, updateUserPassword, deactivateUser, activateUser, assignUserRole, removeUserRole } = useMockData();
+  const { isAdmin, profiles, userRoles, createUser, updateUser, updateUserPassword, deactivateUser, activateUser, assignUserRole, removeUserRole } = useSupabaseData();
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);

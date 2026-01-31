@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
-import { useMockData } from '@/contexts/SupabaseDataContext';
+import { useSupabaseData } from '@/contexts/SupabaseDataContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,8 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { StallStatus, Stall } from '@/types/database';
-import { Search, Eye, ExternalLink, Square } from 'lucide-react';
+import { Search, Eye, ExternalLink, Square, Pencil, Check, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 
 const statusColors: Record<StallStatus, string> = { 
   available: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400', 
@@ -32,12 +33,18 @@ const Stalls = () => {
     stalls, isAdmin, 
     transactions, transactionItems, 
     getLeadById, getServiceAllocationsByStallId, services,
-    getPaymentsByTransactionId
-  } = useMockData();
+    getPaymentsByTransactionId, updateStall
+  } = useSupabaseData();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewingStall, setViewingStall] = useState<Stall | null>(null);
+  
+  // Inline editing state
+  const [editingStallId, setEditingStallId] = useState<string | null>(null);
+  const [editingPrice, setEditingPrice] = useState<string>('');
+  const [savingPrice, setSavingPrice] = useState(false);
 
   const filteredStalls = stalls.filter(s => 
     s.stall_number.toLowerCase().includes(search.toLowerCase()) && 
@@ -71,6 +78,48 @@ const Stalls = () => {
 
   const handleViewStall = (stall: Stall) => {
     setViewingStall(stall);
+  };
+
+  // Inline price editing handlers
+  const handleStartEdit = (stall: Stall) => {
+    setEditingStallId(stall.id);
+    setEditingPrice(String(stall.base_rent));
+  };
+
+  const handleCancelEdit = () => {
+    setEditingStallId(null);
+    setEditingPrice('');
+  };
+
+  const handleSavePrice = async (stall: Stall) => {
+    const newPrice = Number(editingPrice);
+    if (!Number.isFinite(newPrice) || newPrice < 0) {
+      toast({
+        title: 'Invalid price',
+        description: 'Please enter a valid amount.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSavingPrice(true);
+    try {
+      await updateStall(stall.id, { base_rent: newPrice });
+      toast({
+        title: 'Price updated',
+        description: `Stall ${stall.stall_number} base rent updated to ₹${newPrice.toLocaleString()}.`,
+      });
+      setEditingStallId(null);
+      setEditingPrice('');
+    } catch (error: any) {
+      toast({
+        title: 'Update failed',
+        description: error?.message || 'Failed to update price. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingPrice(false);
+    }
   };
 
   const stallInfo = viewingStall ? getStallTransactionInfo(viewingStall.id) : null;
@@ -130,6 +179,9 @@ const Stalls = () => {
               <TableBody>
                 {filteredStalls.map((stall) => {
                   const txnInfo = getStallTransactionInfo(stall.id);
+                  const isEditing = editingStallId === stall.id;
+                  const canEdit = isAdmin && stall.status === 'available';
+                  
                   return (
                     <TableRow key={stall.id}>
                       <TableCell 
@@ -140,7 +192,30 @@ const Stalls = () => {
                       </TableCell>
                       <TableCell>3×2</TableCell>
                       <TableCell>{stall.zone}</TableCell>
-                      {isAdmin && <TableCell>₹{stall.base_rent.toLocaleString()}</TableCell>}
+                      {isAdmin && (
+                        <TableCell>
+                          {isEditing ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">₹</span>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={editingPrice}
+                                onChange={(e) => setEditingPrice(e.target.value)}
+                                className="h-8 w-24"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSavePrice(stall);
+                                  if (e.key === 'Escape') handleCancelEdit();
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <span>₹{stall.base_rent.toLocaleString()}</span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell><Badge className={statusColors[stall.status]}>{statusLabels[stall.status]}</Badge></TableCell>
                       <TableCell>
                         {txnInfo?.lead ? (
@@ -166,10 +241,38 @@ const Stalls = () => {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => handleViewStall(stall)}>
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </Button>
+                        {isEditing ? (
+                          <div className="flex justify-end gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleSavePrice(stall)}
+                              disabled={savingPrice}
+                              className="h-8 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={handleCancelEdit}
+                              disabled={savingPrice}
+                              className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : canEdit ? (
+                          <Button variant="ghost" size="sm" onClick={() => handleStartEdit(stall)}>
+                            <Pencil className="h-4 w-4 mr-1" />
+                            Edit
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="sm" onClick={() => handleViewStall(stall)}>
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

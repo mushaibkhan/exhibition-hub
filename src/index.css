@@ -112,11 +112,30 @@
 @layer base {
   * {
     @apply border-border;
+    /* Android: Prevent tap highlight and improve touch performance */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+
+  html {
+    /* Android: Prevent text size adjustment on orientation change */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* Android: Improve scrolling performance */
+    -webkit-overflow-scrolling: touch;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, sans-serif;
+    /* Android: Optimize font rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* Android: Prevent pull-to-refresh overscroll */
+    overscroll-behavior-y: none;
+    /* Android: Prevent horizontal overscroll */
+    overscroll-behavior-x: none;
   }
 }
 
@@ -148,20 +167,48 @@
   }
 }
 
-/* Mobile scrollbar styling */
+/* Mobile scrollbar styling - Android optimized */
 @media (max-width: 768px) {
-  .overflow-x-auto::-webkit-scrollbar {
+  /* Android: Custom scrollbar styling */
+  .overflow-x-auto::-webkit-scrollbar,
+  .overflow-y-auto::-webkit-scrollbar {
     height: 4px;
+    width: 4px;
   }
   
-  .overflow-x-auto::-webkit-scrollbar-track {
+  .overflow-x-auto::-webkit-scrollbar-track,
+  .overflow-y-auto::-webkit-scrollbar-track {
     background: hsl(var(--muted));
     border-radius: 4px;
   }
   
-  .overflow-x-auto::-webkit-scrollbar-thumb {
+  .overflow-x-auto::-webkit-scrollbar-thumb,
+  .overflow-y-auto::-webkit-scrollbar-thumb {
     background: hsl(var(--muted-foreground) / 0.3);
     border-radius: 4px;
+  }
+
+  /* Android: Enable momentum scrolling */
+  .overflow-x-auto,
+  .overflow-y-auto,
+  [class*="overflow"] {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Android: Fix input zoom on focus (prevent auto-zoom) */
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px !important;
+    /* Prevent zoom on focus in Android Chrome */
+    transform: scale(1);
   }
 }
 
@@ -170,4 +217,161 @@
   touch-action: pan-x pan-y pinch-zoom;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  /* Android: Improve touch performance */
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Android: Optimize touch interactions for buttons and interactive elements */
+button,
+a,
+[role="button"],
+[tabindex]:not([tabindex="-1"]) {
+  /* Android: Improve touch response */
+  touch-action: manipulation;
+  /* Android: Prevent text selection on tap */
+  -webkit-user-select: none;
+  user-select: none;
+  /* Android: Remove tap delay */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Android: Fix input and textarea touch behavior */
+input,
+textarea,
+select {
+  /* Android: Allow text selection in inputs */
+  -webkit-user-select: text;
+  user-select: text;
+  /* Android: Improve touch response */
+  touch-action: manipulation;
+  /* Android: Prevent zoom on focus for small fonts */
+  font-size: 16px;
+}
+
+/* Android: Fix safe area insets for notched devices */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
+
+  .mobile-header,
+  header[class*="sticky"] {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+}
+
+/* Android: Prevent zoom on input focus (16px minimum font size) */
+.android-input-fix {
+  font-size: 16px !important;
+}
+
+@media (min-width: 768px) {
+  .android-input-fix {
+    font-size: 14px !important; /* Restore smaller font on desktop */
+  }
+}
+
+/* Android: Optimize dialog scrolling and prevent body scroll */
+.android-dialog-fix {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* Android: Prevent dialog from causing body scroll */
+  touch-action: pan-y;
+}
+
+/* Android: Fix table scrolling on mobile */
+@media (max-width: 768px) {
+  table {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  /* Android: Improve table cell touch targets */
+  td,
+  th {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+}
+
+/* Android: Fix card and container spacing */
+@media (max-width: 768px) {
+  .card,
+  [class*="Card"] {
+    /* Android: Ensure proper spacing on small screens */
+    margin: 0;
+    border-radius: 0;
+  }
+
+  /* Android: Fix padding in containers */
+  .p-3,
+  .p-4,
+  .p-6 {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+}
+
+/* Android: Fix button touch targets */
+@media (max-width: 768px) {
+  button,
+  .btn,
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+    /* Android: Improve touch response */
+    touch-action: manipulation;
+  }
+}
+
+/* Android: Fix select dropdown behavior */
+select {
+  /* Android: Prevent zoom on focus */
+  font-size: 16px;
+  touch-action: manipulation;
+}
+
+@media (min-width: 768px) {
+  select {
+    font-size: 14px;
+  }
+}
+
+/* Android: Fix sidebar overlay touch behavior */
+@media (max-width: 768px) {
+  [class*="overlay"],
+  [class*="backdrop"],
+  .android-overlay-fix {
+    /* Android: Prevent touch events from passing through */
+    touch-action: none;
+    /* Android: Improve overlay rendering */
+    will-change: opacity;
+  }
+
+  /* Android: Optimize sidebar animation */
+  .android-sidebar-fix {
+    /* Android: Improve sidebar rendering performance */
+    will-change: transform;
+    transform: translateZ(0);
+    /* Android: Enable hardware acceleration */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+}
+
+/* Android: Additional viewport height fixes for address bar */
+@media (max-width: 768px) {
+  /* Android: Fix 100vh issue with address bar */
+  .min-h-screen {
+    min-height: -webkit-fill-available;
+  }
+
+  /* Android: Fix dialog positioning on mobile */
+  [class*="DialogContent"],
+  [class*="dialog"] {
+    max-height: -webkit-fill-available;
+  }
 }

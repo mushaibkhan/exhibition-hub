@@ -109,8 +109,15 @@ export interface Lead {
   email: string | null;
   company: string | null;
   status: LeadStatus;
-  interested_size: string | null;
+  interested_stalls: string[]; // Array of stall IDs
+  target_stall_count: number | null; // Quantity interest when specific stalls not selected
   interested_zone: string | null;
+  // Quotation fields
+  quoted_amount: number;
+  quoted_gst: boolean;
+  quoted_cgst: number;
+  quoted_sgst: number;
+  quoted_total: number;
   notes: string | null;
   created_by: string | null;
   created_at: string;
@@ -123,7 +130,17 @@ export interface Transaction {
   exhibition_id: string;
   transaction_number: string;
   lead_id: string;
+  // GST fields
+  is_gst: boolean;
+  subtotal: number;
+  cgst_amount: number;
+  sgst_amount: number;
+  gst_amount: number;
   total_amount: number;
+  // Discount fields
+  discount_type: 'fixed' | 'percentage' | null;
+  discount_value: number | null;
+  discount_amount: number;
   notes: string | null;
   created_by: string | null;
   cancelled: boolean;
@@ -181,4 +198,18 @@ export interface Expense {
   created_at: string;
   updated_at: string;
   account?: Account;
+}
+
+export type InternalLedgerStatus = 'pending' | 'settled';
+
+export interface InternalLedger {
+  id: string;
+  exhibition_id: string;
+  from_name: string;
+  to_name: string;
+  amount: number;
+  description: string | null;
+  status: InternalLedgerStatus;
+  settled_at: string | null;
+  created_at: string;
 }

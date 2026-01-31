@@ -1,5 +1,83 @@
 import { InvoiceData } from '@/types/invoice';
+import { Transaction, Lead, TransactionItem } from '@/types/database';
 import { generateInvoiceHTML } from './generateInvoiceHTML';
+import { numberToWords } from './invoiceUtils';
+import { COMPANY_CONFIG, INVOICE_CONFIG } from './invoiceConfig';
+
+/**
+ * Build invoice data directly from a transaction (for booking confirmation)
+ * This is used when auto-generating invoice after booking creation
+ */
+export function buildBookingInvoiceData(
+  transaction: Transaction,
+  lead: Lead,
+  items: TransactionItem[],
+  invoiceNumber: string
+): InvoiceData {
+  // Find stall item to get stall number
+  const stallItem = items.find(item => item.item_type === 'stall' && item.stall_id);
+  const stallNumber = stallItem ? stallItem.item_name.replace('Stall ', '') : null;
+  
+  // Use transaction's subtotal
+  const subtotal = transaction.subtotal || items.reduce((sum, item) => sum + item.final_price, 0);
+  
+  // Build description
+  const serviceItems = items.filter(item => item.item_type === 'service');
+  const stallSizeDisplay = INVOICE_CONFIG.stallSize.replace('×', 'x').toUpperCase();
+  const servicesText = serviceItems.length > 0 
+    ? serviceItems.map(item => item.item_name).join(', ')
+    : 'Booking Services';
+  const description = stallItem 
+    ? `STALL ${stallSizeDisplay} Metres Octonorm - ${servicesText}`
+    : servicesText;
+  
+  // Format invoice date (today)
+  const today = new Date();
+  const invoiceDate = today.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).split('/').join('-');
+  
+  // GST values from transaction
+  const isGst = transaction.is_gst || false;
+  const cgst = transaction.cgst_amount || 0;
+  const sgst = transaction.sgst_amount || 0;
+  
+  return {
+    invoiceNumber,
+    invoiceDate,
+    companyName: COMPANY_CONFIG.name,
+    companyAddress: COMPANY_CONFIG.address,
+    companyGstNo: COMPANY_CONFIG.gstNo,
+    buyerName: lead.name,
+    buyerCompany: lead.company,
+    buyerAddress: lead.notes || null,
+    buyerGstNo: null,
+    buyerEmail: lead.email || null,
+    buyerState: 'Telangana',
+    stallNumber,
+    description,
+    hsnCode: INVOICE_CONFIG.hsnCode,
+    quantity: 1,
+    rate: subtotal,
+    amount: subtotal,
+    isGst,
+    cgst,
+    sgst,
+    igst: 0,
+    grandTotal: transaction.total_amount,
+    taxType: 'cgst_sgst',
+    discountAmount: transaction.discount_amount || 0,
+    discountType: transaction.discount_type,
+    discountValue: transaction.discount_value,
+    amountPaid: 0, // No payment yet for booking confirmation
+    balanceDue: transaction.total_amount,
+    amountInWords: numberToWords(transaction.total_amount),
+    bankDetails: COMPANY_CONFIG.bankDetails,
+    footerText: 'For M/s Catalyst Connect',
+  };
+}
 
 /**
  * Download invoice as HTML file (user can print to PDF)
