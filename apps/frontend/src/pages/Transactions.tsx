@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MockAppLayout } from '@/components/layout/MockAppLayout';
 import { useData } from '@/contexts/DataContext';
 import { useExhibition } from '@/contexts/ExhibitionContext';
-import { buildInvoiceData, generateInvoiceNumber } from '@/lib/invoiceUtils';
+import { buildInvoiceData } from '@/lib/invoiceUtils';
 import { downloadInvoicePDF, buildBookingInvoiceData } from '@/lib/generateInvoicePDF';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -626,19 +626,16 @@ const Transactions = () => {
           const lead = getLeadById(txn.lead_id);
           const items = getItemsByTransactionId(txn.id);
           // Get all payments including the newly created one (will be in payments array after refresh, but we have it)
-          const allPayments = [...(getPaymentsByTransactionId(txn.id) || []), createdPayment];
+          const txnPayments = [...(getPaymentsByTransactionId(txn.id) || []), createdPayment];
           
           if (lead) {
-            // Generate invoice number
-            const invoiceNumber = await generateInvoiceNumber(payments);
-            
-            // Build invoice data
+            // Build invoice data - invoice number is generated inside buildInvoiceData
             const invoiceData = buildInvoiceData(
-              { ...createdPayment, invoice_number: invoiceNumber } as any,
+              createdPayment,
               txn,
               lead,
               items,
-              allPayments,
+              txnPayments,
               {
                 id: currentExhibition.id,
                 name: currentExhibition.name,
@@ -648,11 +645,9 @@ const Transactions = () => {
                 end_date: currentExhibition.endDate,
                 created_at: '',
                 updated_at: '',
-              }
+              },
+              payments
             );
-            
-            // Update invoice number in data
-            invoiceData.invoiceNumber = invoiceNumber;
             
             // Generate and download invoice HTML file (user can print to PDF)
             downloadInvoicePDF(invoiceData);

@@ -68,10 +68,10 @@ export function numberToWords(amount: number): string {
  * Generate next invoice number
  * Format: CC001, CC002, etc.
  */
-export async function generateInvoiceNumber(existingPayments: Payment[]): Promise<string> {
+export function generateInvoiceNumber(existingPayments: Payment[]): string {
   // Extract invoice numbers from existing payments
   // Format: CC/001, CC/002, etc. (with slash)
-  const maxInvoiceNumber = existingPayments
+  const maxInvoiceNumber = (existingPayments || [])
     .map(p => {
       // Extract number from invoice_number (support both CC001 and CC/001 formats)
       const invoiceNum = (p as any).invoice_number || '';
@@ -88,14 +88,22 @@ export async function generateInvoiceNumber(existingPayments: Payment[]): Promis
 /**
  * Build invoice data from payment and related entities
  * Uses GST values from the transaction if is_gst is true
+ * @param payment Current payment being processed
+ * @param transaction Transaction related to the payment
+ * @param lead Buyer lead information
+ * @param items Items in the transaction
+ * @param transactionPayments All payments for this specific transaction
+ * @param exhibition Current exhibition details
+ * @param allPayments All payments across the exhibition (used for invoice number generation)
  */
 export function buildInvoiceData(
   payment: Payment,
   transaction: Transaction,
   lead: Lead,
   items: TransactionItem[],
-  allPayments: Payment[],
-  exhibition: Exhibition
+  transactionPayments: Payment[],
+  exhibition: Exhibition,
+  allPayments: Payment[]
 ): InvoiceData {
   // Find stall item to get stall number
   const stallItem = items.find(item => item.item_type === 'stall' && item.stall_id);
@@ -156,8 +164,8 @@ export function buildInvoiceData(
   // Grand total from transaction (includes GST if applicable)
   const grandTotal = transaction.total_amount;
   
-  // Calculate total payments made so far
-  const totalPaid = allPayments.reduce((sum, p) => sum + p.amount, 0);
+  // Calculate total payments made so far for this transaction
+  const totalPaid = transactionPayments.reduce((sum, p) => sum + p.amount, 0);
   const balanceDue = transaction.total_amount - totalPaid;
   
   // Build description to match template format: "STALL 3x3 Metres Octonorm - Booking Services"
@@ -177,8 +185,11 @@ export function buildInvoiceData(
     year: 'numeric'
   }).split('/').join('-');
   
+  // Set invoice number: use provided one, or generate it dynamically from all payments
+  const invoiceNumber = (payment as any).invoice_number || generateInvoiceNumber(allPayments);
+
   return {
-    invoiceNumber: (payment as any).invoice_number || `${INVOICE_CONFIG.invoicePrefix}XXX`, // Will be set later
+    invoiceNumber,
     invoiceDate,
     companyName: COMPANY_CONFIG.name,
     companyAddress: COMPANY_CONFIG.address,

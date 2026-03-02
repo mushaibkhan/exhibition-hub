@@ -4,7 +4,7 @@ import { MockAppLayout } from '@/components/layout/MockAppLayout';
 import { useData } from '@/contexts/DataContext';
 import { useExhibition } from '@/contexts/ExhibitionContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { buildInvoiceData, generateInvoiceNumber } from '@/lib/invoiceUtils';
+import { buildInvoiceData } from '@/lib/invoiceUtils';
 import { downloadInvoicePDF } from '@/lib/generateInvoicePDF';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -49,18 +49,15 @@ const Receipts = () => {
       }
 
       const items = getItemsByTransactionId(txn.id);
-      const allPayments = getPaymentsByTransactionId(txn.id);
+      const txnPayments = getPaymentsByTransactionId(txn.id);
 
-      // Generate invoice number
-      const invoiceNumber = await generateInvoiceNumber(payments);
-
-      // Build invoice data
+      // Build invoice data - invoice number is generated inside buildInvoiceData
       const invoiceData = buildInvoiceData(
-        { ...payment, invoice_number: invoiceNumber } as any,
+        payment,
         txn,
         lead,
         items,
-        allPayments,
+        txnPayments,
         {
           id: currentExhibition.id,
           name: currentExhibition.name,
@@ -70,10 +67,9 @@ const Receipts = () => {
           end_date: currentExhibition.endDate,
           created_at: '',
           updated_at: '',
-        }
+        },
+        payments
       );
-
-      invoiceData.invoiceNumber = invoiceNumber;
 
       // Generate and download invoice HTML file (user can print to PDF)
       downloadInvoicePDF(invoiceData);
