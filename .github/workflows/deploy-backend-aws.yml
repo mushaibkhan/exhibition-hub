@@ -1,0 +1,77 @@
+# Deploy backend (API) to AWS: build image, push to ECR, update ECS service.
+#
+# Required setup:
+#   Repo variables (Settings > Secrets and variables > Actions): AWS_REGION, ECR_REPOSITORY, ECS_CLUSTER, ECS_SERVICE.
+#   Secret: AWS_ROLE_ARN (IAM role ARN for OIDC). Or use secrets AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY and set role-to-assume to empty.
+#   AWS: ECR repo, ECS cluster + Fargate service (family exhibition-hub-api), Secrets Manager with DATABASE_URL, REDIS_URL, JWT_SECRET.
+#   Update deploy/ecs-task-definition.json: executionRoleArn, taskRoleArn, and secret ARNs for your account/region.
+
+name: Deploy backend to AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'exhibition-hub-api' }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'exhibition-hub' }}
+  ECS_SERVICE: ${{ vars.ECS_SERVICE || 'api' }}
+  ECS_TASK_DEFINITION: deploy/ecs-task-definition.json
+  CONTAINER_NAME: api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        if: secrets.AWS_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials (access key)
+        if: secrets.AWS_ROLE_ARN == ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        id: build
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f apps/api/Dockerfile.production apps/api
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Fill in new image in task definition
+        id: task-def-edit
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.ECS_TASK_DEFINITION }}
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.build.outputs.image }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v4
+        with:
+          task-definition: ${{ steps.task-def-edit.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
