@@ -11,7 +11,7 @@ import apiRouter from './routes/index.js';
 const app = express();
 
 app.use(helmet());
-app.use(cors());
+app.use(cors({ origin: env.corsOrigin }));
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 
@@ -27,6 +27,10 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api', apiRouter);
+
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
 
 app.use(errorHandler);
 
@@ -45,9 +49,36 @@ async function start() {
   }
   console.log('Database connected');
 
-  app.listen(env.port, () => {
+  const server = app.listen(env.port, () => {
     console.log(`Backend running on port ${env.port} [${env.nodeEnv}]`);
   });
+
+  const shutdown = async (signal: string) => {
+    console.log(`\n${signal} received. Shutting down gracefully...`);
+
+    server.close(() => {
+      console.log('HTTP server closed.');
+    });
+
+    try {
+      // Close database connection
+      const { pool } = await import('./config/db.js');
+      await pool.end();
+      console.log('Database pool closed.');
+
+      // Close Redis connection
+      await redis.quit();
+      console.log('Redis connection closed.');
+
+      process.exit(0);
+    } catch (err) {
+      console.error('Error during graceful shutdown:', err);
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 start();
