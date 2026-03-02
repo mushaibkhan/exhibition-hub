@@ -4,6 +4,7 @@ import { AppError } from '../middleware/errorHandler.js';
 import { cacheMiddleware } from '../cache/cacheMiddleware.js';
 import { CacheKeys, CacheTTL } from '../cache/cacheKeys.js';
 import { invalidateAccounts } from '../cache/invalidation.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ router.get(
   },
 );
 
-router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { name, upi_details, bank_details, notes, is_active } = req.body;
 
@@ -40,7 +41,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.put('/:id', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const { name, upi_details, bank_details, notes, is_active } = req.body;
@@ -71,7 +72,7 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:id', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
 

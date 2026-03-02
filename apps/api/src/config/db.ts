@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { env } from './env.js';
+import { logger } from '../utils/logger.js';
 
 const { Pool } = pg;
 
@@ -11,7 +12,7 @@ export const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected pool error:', err);
+  logger.error(err, 'Unexpected pool error');
 });
 
 export async function checkDbConnection(): Promise<boolean> {

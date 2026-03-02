@@ -1,5 +1,6 @@
 import Redis from 'ioredis';
 import { env } from './env.js';
+import { logger } from '../utils/logger.js';
 
 export const redis = new Redis(env.redisUrl, {
   maxRetriesPerRequest: 3,
@@ -11,7 +12,7 @@ export const redis = new Redis(env.redisUrl, {
 });
 
 redis.on('error', (err) => {
-  console.error('Redis error:', err.message);
+  logger.error(err, 'Redis error');
 });
 
 export async function checkRedisConnection(): Promise<boolean> {

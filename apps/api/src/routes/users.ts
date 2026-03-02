@@ -5,8 +5,12 @@ import { AppError } from '../middleware/errorHandler.js';
 import { cacheMiddleware } from '../cache/cacheMiddleware.js';
 import { CacheKeys, CacheTTL } from '../cache/cacheKeys.js';
 import { invalidateProfiles, invalidateUserRoles } from '../cache/invalidation.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
+
+// --------------- Apply Admin Check to all user routes ---------------
+router.use(requireAdmin);
 
 // --------------- GET users (profiles + roles) ---------------
 
