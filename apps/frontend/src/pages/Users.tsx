@@ -173,19 +173,15 @@ const UsersPage = () => {
           .filter(ur => ur.user_id === editingUser.id)
           .map(ur => ur.role);
         
-        // Remove roles that are no longer selected
-        for (const role of currentRoles) {
-          if (!formData.roles.includes(role)) {
-            await removeUserRole(editingUser.id, role);
-          }
-        }
+        // Determine which roles to remove and add
+        const rolesToRemove = currentRoles.filter(role => !formData.roles.includes(role));
+        const rolesToAdd = formData.roles.filter(role => !currentRoles.includes(role));
 
-        // Add new roles
-        for (const role of formData.roles) {
-          if (!currentRoles.includes(role)) {
-            await assignUserRole(editingUser.id, role);
-          }
-        }
+        // Execute all role updates concurrently
+        await Promise.all([
+          ...rolesToRemove.map(role => removeUserRole(editingUser.id, role)),
+          ...rolesToAdd.map(role => assignUserRole(editingUser.id, role))
+        ]);
 
         toast({
           title: 'Success',
