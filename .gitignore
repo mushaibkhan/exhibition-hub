@@ -33,3 +33,5 @@ redisdata/
 
 # Backups
 backups/
+.env
+.env.development

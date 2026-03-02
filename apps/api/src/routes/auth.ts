@@ -4,10 +4,19 @@ import { pool } from '../config/db.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { generateToken, requireAuth, JwtPayload } from '../middleware/auth.js';
 import { invalidateProfiles, invalidateUserRoles } from '../cache/invalidation.js';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
 
-router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per `window` (here, per 15 minutes)
+  message: { error: 'Too many login attempts, please try again after 15 minutes' },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+router.post('/login', loginLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body;
 
