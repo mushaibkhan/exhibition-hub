@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import { pool } from '../config/db.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { exhibitionScope } from '../middleware/exhibitionScope.js';
@@ -62,7 +63,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
     // Step 1: Generate transaction number
     const now = Date.now();
-    const random = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+    const random = String(crypto.randomInt(1000)).padStart(3, '0');
     const year = new Date().getFullYear();
     const txnNumber = `TXN-${year}-${now}-${random}`;
 
