@@ -49,7 +49,7 @@ const Receipts = () => {
       }
 
       const items = getItemsByTransactionId(txn.id);
-      const txnPayments = getPaymentsByTransactionId(txn.id);
+      const txnPayments = getPaymentsByTransactionId(txn.id) || [];
 
       // Build invoice data - invoice number is generated inside buildInvoiceData
       const invoiceData = buildInvoiceData(

@@ -626,7 +626,11 @@ const Transactions = () => {
           const lead = getLeadById(txn.lead_id);
           const items = getItemsByTransactionId(txn.id);
           // Get all payments including the newly created one (will be in payments array after refresh, but we have it)
-          const txnPayments = [...(getPaymentsByTransactionId(txn.id) || []), createdPayment];
+          const existingPayments = getPaymentsByTransactionId(txn.id) || [];
+          const txnPayments = [
+            ...existingPayments.filter(p => p.id !== createdPayment.id),
+            createdPayment,
+          ];
           
           if (lead) {
             // Build invoice data - invoice number is generated inside buildInvoiceData
