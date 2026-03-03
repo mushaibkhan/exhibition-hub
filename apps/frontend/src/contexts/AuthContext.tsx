@@ -26,7 +26,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = 'exhibition_hub_token';
-const USER_KEY = 'exhibition_hub_user';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -38,41 +37,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearAuth = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
     setUser(null);
   }, []);
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
-    const storedUser = localStorage.getItem(USER_KEY);
 
-    if (token && storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser) as AuthUser;
-        setUser(parsed);
-
-        api.get<AuthUser & { roles: AppRole[] }>('/auth/me')
-          .then((freshUser) => {
-            const userData: AuthUser = {
-              id: freshUser.id,
-              email: freshUser.email,
-              full_name: freshUser.full_name,
-              phone: freshUser.phone,
-              is_active: freshUser.is_active,
-              roles: freshUser.roles,
-            };
-            setUser(userData);
-            localStorage.setItem(USER_KEY, JSON.stringify(userData));
-          })
-          .catch(() => {
-            clearAuth();
-          });
-      } catch {
-        clearAuth();
-      }
+    if (token) {
+      api.get<AuthUser & { roles: AppRole[] }>('/auth/me')
+        .then((freshUser) => {
+          const userData: AuthUser = {
+            id: freshUser.id,
+            email: freshUser.email,
+            full_name: freshUser.full_name,
+            phone: freshUser.phone,
+            is_active: freshUser.is_active,
+            roles: freshUser.roles,
+          };
+          setUser(userData);
+        })
+        .catch(() => {
+          clearAuth();
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   }, [clearAuth]);
 
   const signIn = async (email: string, password: string) => {
@@ -83,7 +75,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       localStorage.setItem(TOKEN_KEY, response.token);
-      localStorage.setItem(USER_KEY, JSON.stringify(response.user));
       setUser(response.user);
 
       return { error: null };
