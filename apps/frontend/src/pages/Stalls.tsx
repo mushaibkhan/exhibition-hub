@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -160,7 +160,7 @@ const Stalls = () => {
   const stallServices = viewingStall ? getServicesForStall(viewingStall.id) : [];
 
   return (
-    <MockAppLayout title="Stalls" subtitle="View stall allocations (managed via Transactions)">
+    <AppLayout title="Stalls" subtitle="View stall allocations (managed via Transactions)">
       <div className="space-y-6">
         <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           <Card><CardContent className="pt-6"><div className="text-2xl font-bold">{stalls.length}</div><p className="text-sm text-muted-foreground">Total</p></CardContent></Card>
@@ -507,7 +507,7 @@ const Stalls = () => {
           </div>
         </DialogContent>
       </Dialog>
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

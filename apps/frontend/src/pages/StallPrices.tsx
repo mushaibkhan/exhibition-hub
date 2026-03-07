@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -153,20 +153,20 @@ const StallPrices = () => {
 
   if (!isAdmin) {
     return (
-      <MockAppLayout title="Stall Prices" subtitle="Update stall pricing">
+      <AppLayout title="Stall Prices" subtitle="Update stall pricing">
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
             You do not have permission to edit stall prices.
           </CardContent>
         </Card>
-      </MockAppLayout>
+      </AppLayout>
     );
   }
 
   const editedCount = filteredStalls.filter(isDirty).length;
 
   return (
-    <MockAppLayout title="Stall Prices" subtitle="Edit base rent and notes per stall">
+    <AppLayout title="Stall Prices" subtitle="Edit base rent and notes per stall">
       <div className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 flex-col gap-3 sm:flex-row">
@@ -284,7 +284,7 @@ const StallPrices = () => {
           </CardContent>
         </Card>
       </div>
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

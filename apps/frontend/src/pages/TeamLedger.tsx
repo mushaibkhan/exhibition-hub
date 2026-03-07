@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useData } from '@/contexts/DataContext';
 // import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -229,7 +229,7 @@ const TeamLedger = () => {
     : "Track your cash handovers";
 
   return (
-    <MockAppLayout title="Team Ledger" subtitle={pageSubtitle}>
+    <AppLayout title="Team Ledger" subtitle={pageSubtitle}>
       <div className="space-y-6">
         {/* Stat Cards */}
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -535,7 +535,7 @@ const TeamLedger = () => {
           </div>
         </DialogContent>
       </Dialog>
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

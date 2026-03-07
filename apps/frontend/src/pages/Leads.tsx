@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -440,7 +440,7 @@ const Leads = () => {
   };
 
   return (
-    <MockAppLayout title="Leads" subtitle="Manage enquiries and prospects">
+    <AppLayout title="Leads" subtitle="Manage enquiries and prospects">
       <div className="space-y-6">
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{leads.length}</div></CardContent></Card>
@@ -1003,7 +1003,7 @@ const Leads = () => {
           )}
         </DialogContent>
       </Dialog>
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

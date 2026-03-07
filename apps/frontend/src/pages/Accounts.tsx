@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -144,7 +144,7 @@ const Accounts = () => {
   };
 
   return (
-    <MockAppLayout title="Accounts" subtitle="Payment accounts (Admin Only)">
+    <AppLayout title="Accounts" subtitle="Payment accounts (Admin Only)">
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -400,7 +400,7 @@ const Accounts = () => {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

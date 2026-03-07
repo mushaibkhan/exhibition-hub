@@ -3,15 +3,17 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useExhibition } from '@/contexts/ExhibitionContext';
 import { RoleSwitcher } from './RoleSwitcher';
+import { ReactNode } from 'react';
 
 interface MobileHeaderProps {
   title: string;
   subtitle?: string;
+  actions?: ReactNode;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
 }
 
-export const MobileHeader = ({ title, subtitle, sidebarOpen, onToggleSidebar }: MobileHeaderProps) => {
+export const MobileHeader = ({ title, subtitle, actions, sidebarOpen, onToggleSidebar }: MobileHeaderProps) => {
   const { currentExhibition } = useExhibition();
 
   return (
@@ -40,7 +42,8 @@ export const MobileHeader = ({ title, subtitle, sidebarOpen, onToggleSidebar }: 
         )}
       </div>
       
-      <div className="shrink-0 ml-2">
+      <div className="shrink-0 ml-2 flex items-center gap-2">
+        {actions && <div className="hidden md:flex items-center gap-2 mr-2">{actions}</div>}
         <RoleSwitcher />
       </div>
     </header>

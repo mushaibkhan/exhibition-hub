@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -316,7 +316,7 @@ const UsersPage = () => {
   };
 
   return (
-    <MockAppLayout title="Users" subtitle="System users (Admin Only)">
+    <AppLayout title="Users" subtitle="System users (Admin Only)">
       <div className="space-y-6">
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-4">
@@ -773,7 +773,7 @@ const UsersPage = () => {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

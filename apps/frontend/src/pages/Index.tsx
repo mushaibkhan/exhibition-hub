@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { StallBox } from '@/components/floor/StallBox';
 import { FloorLegend } from '@/components/floor/FloorLegend';
 import { StallDrawer } from '@/components/floor/StallDrawer';
@@ -113,7 +113,7 @@ const Index = () => {
   };
 
   return (
-    <MockAppLayout title="Floor Layout" subtitle="Exhibition floor stall overview">
+    <AppLayout title="Floor Layout" subtitle="Exhibition floor stall overview">
       <div className="space-y-6">
         <FloorLegend />
         <Tabs defaultValue="floor1" className="w-full">
@@ -136,7 +136,7 @@ const Index = () => {
         </Tabs>
       </div>
       <StallDrawer stall={selectedStall} open={drawerOpen} onOpenChange={setDrawerOpen} onUpdate={() => {}} />
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

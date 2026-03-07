@@ -1,6 +1,6 @@
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useData } from '@/contexts/DataContext';
 import { useExhibition } from '@/contexts/ExhibitionContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -126,7 +126,7 @@ const Receipts = () => {
   };
 
   return (
-    <MockAppLayout title="Receipts" subtitle="Payment receipts">
+    <AppLayout title="Receipts" subtitle="Payment receipts">
       <div className="space-y-6">
         <div className="flex justify-end">
           <Button variant="outline" onClick={handleExport} disabled={payments.length === 0 || isExporting} className="w-full sm:w-auto h-10 min-h-[44px]">
@@ -208,7 +208,7 @@ const Receipts = () => {
           )}
           </TableBody></Table></div></CardContent></Card>
       </div>
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

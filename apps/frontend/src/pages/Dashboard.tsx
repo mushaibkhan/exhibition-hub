@@ -1,4 +1,4 @@
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useData } from '@/contexts/DataContext';
@@ -62,7 +62,7 @@ const Dashboard = () => {
   })();
 
   return (
-    <MockAppLayout title="Dashboard" subtitle={isAdmin ? "Overview and analytics" : "Your performance overview"}>
+    <AppLayout title="Dashboard" subtitle={isAdmin ? "Overview and analytics" : "Your performance overview"}>
       <div className="space-y-6">
         {/* Key Metrics */}
         {isAdmin && <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
@@ -282,7 +282,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>}
       </div>
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

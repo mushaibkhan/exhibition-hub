@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -219,7 +219,7 @@ const Services = () => {
   };
 
   return (
-    <MockAppLayout title="Services" subtitle="Add-on services assigned to stalls">
+    <AppLayout title="Services" subtitle="Add-on services assigned to stalls">
       <div className="space-y-6">
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           {(Object.keys(grouped) as ServiceCategory[]).map(cat => { 
@@ -658,7 +658,7 @@ const Services = () => {
           </DialogContent>
         </Dialog>
       )}
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

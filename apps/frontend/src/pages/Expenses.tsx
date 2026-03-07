@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useState } from 'react';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -331,7 +331,7 @@ const Expenses = () => {
   };
 
   return (
-    <MockAppLayout title="Expenses" subtitle="Track all costs incurred to run the exhibition (Admin Only)">
+    <AppLayout title="Expenses" subtitle="Track all costs incurred to run the exhibition (Admin Only)">
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -676,7 +676,7 @@ const Expenses = () => {
           </CardContent>
         </Card>
       </div>
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

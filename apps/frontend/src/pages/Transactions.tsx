@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useData } from '@/contexts/DataContext';
 import { useExhibition } from '@/contexts/ExhibitionContext';
 import { buildInvoiceData } from '@/lib/invoiceUtils';
@@ -697,7 +697,7 @@ const Transactions = () => {
   };
 
   return (
-    <MockAppLayout title="Bookings" subtitle="Central hub for all sales">
+    <AppLayout title="Bookings" subtitle="Central hub for all sales">
       <div className="space-y-6">
         {isAdmin && (
           <div className="grid gap-4 md:grid-cols-4">
@@ -1747,7 +1747,7 @@ const Transactions = () => {
           </div>
         </DialogContent>
       </Dialog>
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 

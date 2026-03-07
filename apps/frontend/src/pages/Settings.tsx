@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { MockAppLayout } from '@/components/layout/MockAppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useData } from '@/contexts/DataContext';
 import { useExhibition } from '@/contexts/ExhibitionContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -192,16 +192,16 @@ const SettingsPage = () => {
 
   if (exhibitionsLoading) {
     return (
-      <MockAppLayout title="Settings" subtitle="Manage Exhibitions (Admin Only)">
+      <AppLayout title="Settings" subtitle="Manage Exhibitions (Admin Only)">
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </MockAppLayout>
+      </AppLayout>
     );
   }
 
   return (
-    <MockAppLayout title="Settings" subtitle="Manage Exhibitions (Admin Only)">
+    <AppLayout title="Settings" subtitle="Manage Exhibitions (Admin Only)">
       <div className="space-y-6">
         {/* Add Exhibition Button */}
         <div className="flex justify-end">
@@ -472,7 +472,7 @@ const SettingsPage = () => {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </MockAppLayout>
+    </AppLayout>
   );
 };
 
