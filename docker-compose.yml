@@ -1,13 +1,14 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.db
     environment:
       POSTGRES_DB: exhibition_hub
       POSTGRES_USER: app_user
       POSTGRES_PASSWORD: ${DB_PASSWORD:-devpassword123}
     volumes:
-      - pgdata_v2:/var/lib/postgresql/data
-      - ./supabase/migrations:/docker-entrypoint-initdb.d
+      - pgdata_v3:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
@@ -61,5 +62,5 @@ services:
       - api
 
 volumes:
-  pgdata_v2:
+  pgdata_v3:
   redisdata:
