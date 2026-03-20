@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: app_user
       POSTGRES_PASSWORD: ${DB_PASSWORD:-devpassword123}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata_v2:/var/lib/postgresql/data
       - ./supabase/migrations:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
@@ -61,5 +61,5 @@ services:
       - api
 
 volumes:
-  pgdata:
+  pgdata_v2:
   redisdata:
