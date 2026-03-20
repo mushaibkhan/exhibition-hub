@@ -41,8 +41,7 @@ services:
       NODE_ENV: development
     ports:
       - "4000:4000"
-    volumes:
-      - ./apps/api/src:/app/src
+
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,10 +56,7 @@ services:
       VITE_API_URL: http://localhost:4000/api
     ports:
       - "5173:5173"
-    volumes:
-      - ./apps/frontend/src:/app/src
-      - ./apps/frontend/public:/app/public
-      - ./apps/frontend/index.html:/app/index.html
+
     depends_on:
       - api
 
